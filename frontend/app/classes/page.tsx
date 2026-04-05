@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
 
 // Simplified SVG Icons
 const BookIcon = () => (
@@ -39,18 +40,125 @@ interface ClassesViewProps {
   onClassSelect: (courseCode: string) => void;
 }
 
+interface EnrolledCourseRow {
+  course_id: number;
+  Courses: {
+    id: number;
+    dept: string;
+    course_number: string;
+    title: string;
+  };
+  Semesters: {
+    id: number;
+    term: string;
+    year: string;
+  };
+}
+
 export function ClassesView({ onClassSelect }: ClassesViewProps) {
-  const enrolledClasses: ClassData[] = [
-    { id: "1", code: "CS 220", name: "Programming Methodology", semester: "Spring 2026", noteCount: 45, memberCount: 128 },
-    { id: "2", code: "CS 311", name: "Algorithms", semester: "Spring 2026", noteCount: 38, memberCount: 95 },
-    { id: "3", code: "MATH 235", name: "Linear Algebra", semester: "Spring 2026", noteCount: 52, memberCount: 156 },
-    { id: "4", code: "CS 240", name: "Reasoning Under Uncertainty", semester: "Spring 2026", noteCount: 31, memberCount: 87 },
-  ];
+  const [enrolledClasses, setEnrolledClasses] = useState<ClassData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchClasses = async () => {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      // Get current user
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        setError('Not logged in');
+        setLoading(false);
+        return;
+      }
+
+      // Fetch enrolled courses with course and semester info
+      const { data, error } = await supabase
+        .from('Student_Enrolled_Courses')
+        .select(`
+          course_id,
+          Courses (
+            id,
+            dept,
+            course_number,
+            title
+          ),
+          Semesters (
+            id,
+            term,
+            year
+          )
+        `)
+        .eq('user_id', session.user.id);
+
+        console.log('Session user ID:', session.user.id);
+        console.log('Raw data:', data);
+        console.log('Fetch error:', error);
+
+      if (error) {
+        console.error('Fetch error:', error);
+        setError('Failed to load classes');
+        setLoading(false);
+        return;
+      }
+
+      // Get note and member counts per course
+      console.log('Data before mapping:', data);
+
+      const classes = await Promise.all((data || []).map(async (row: EnrolledCourseRow) => {
+        const course = row.Courses as any;
+        const semester = row.Semesters as any;
+
+        console.log('Processing row:', row);
+        console.log('Course:', course);
+        console.log('Semester:', semester);
+
+        // Count notes for this course
+        const { count: noteCount } = await supabase
+          .from('Posts')
+          .select('*', { count: 'exact', head: true })
+          .eq('course_id', course.id);
+
+        // Count enrolled students for this course
+        const { count: memberCount } = await supabase
+          .from('Student_Enrolled_Courses')
+          .select('*', { count: 'exact', head: true })
+          .eq('course_id', course.id);
+
+        return {
+          id: String(course.id),
+          code: `${course.dept} ${course.course_number}`,
+          name: course.title,
+          semester: `${semester.term} ${semester.year}`,
+          noteCount: noteCount || 0,
+          memberCount: memberCount || 0,
+        };
+      }));
+
+      setEnrolledClasses(classes);
+      setLoading(false);
+    };
+
+    fetchClasses();
+  }, []);
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <p className="text-gray-500">Loading your classes...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <p className="text-red-500">{error}</p>
+    </div>
+  );
 
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white min-h-screen">
-     
-      {/* Header Section */}
       <div className="mb-10">
         <h1 className="text-3xl font-extrabold text-gray-900 mb-2 tracking-tight">
           My Classes
@@ -60,7 +168,6 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         </p>
       </div>
 
-      {/* Grid Section */}
       <div className="grid md:grid-cols-2 gap-6">
         {enrolledClasses.map((course) => (
           <div
@@ -100,7 +207,6 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         ))}
       </div>
 
-      {/* Empty State */}
       {enrolledClasses.length === 0 && (
         <div className="text-center py-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
           <div className="text-gray-300 flex justify-center mb-4">
@@ -118,13 +224,11 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
   );
 }
 
-// This is the "Entry Point" that Next.js looks for
 export default function Page() {
   return (
     <ClassesView
       onClassSelect={(course) => {
-        console.log("Selected course:", course);
-        alert("Navigating to " + course);
+        console.log('Selected course:', course);
       }}
     />
   );
