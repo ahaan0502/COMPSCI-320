@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-
+import { useSearchParams } from 'next/navigation';
 const ShareIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-7 h-7">
     <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
@@ -78,6 +78,8 @@ const features = [
 export default function Home() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const searchParams = useSearchParams();
+  const error = searchParams.get('error');
 
   useEffect(() => {
     if (isDarkMode) {
@@ -203,6 +205,11 @@ export default function Home() {
               Sign in with UMass Google
             </Link>
             <p className="text-white/60 text-sm">Access restricted to @umass.edu email addresses only</p>
+            {error === 'not-umass' && (
+            <div className="mt-3 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 shadow-sm">
+              Access is restricted to UMass students. Please sign in with your @umass.edu email address.
+            </div>
+          )}
           </div>
         </div>
       </section>
