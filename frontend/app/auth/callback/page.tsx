@@ -36,7 +36,6 @@ export default function AuthCallback() {
               email: data.user.email,
               name: data.user.user_metadata?.full_name,
               created_at: new Date().toISOString(),
-              UMass_verified: false,
             }, { onConflict: 'uuid' });
 
             router.push('/classes');
