@@ -40,23 +40,28 @@ interface ClassesViewProps {
   onClassSelect: (courseCode: string) => void;
 }
 
+interface CourseRecord {
+  course_id?: number;
+  dept: string;
+  course_number: string;
+  title: string;
+}
+
+interface SemesterRecord {
+  semester_id?: number;
+  term: string;
+  year: string;
+}
+
 interface EnrolledCourseRow {
   course_id: number;
-  Courses: {
-    id: number;
-    dept: string;
-    course_number: string;
-    title: string;
-  };
-  Semesters: {
-    id: number;
-    term: string;
-    year: string;
-  };
+  Courses: CourseRecord[] | CourseRecord | null;
+  Semesters: SemesterRecord[] | SemesterRecord | null;
 }
 
 export function ClassesView({ onClassSelect }: ClassesViewProps) {
   const [enrolledClasses, setEnrolledClasses] = useState<ClassData[]>([]);
+  const [userName, setUserName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,24 +80,38 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         return;
       }
 
+      const fallbackName =
+        session.user.user_metadata?.full_name ||
+        session.user.user_metadata?.name ||
+        session.user.email?.split('@')[0] ||
+        'User';
+
+      const { data: profile } = await supabase
+        .from('Users')
+        .select('name')
+        .eq('author_id', session.user.id)
+        .maybeSingle();
+
+      setUserName(profile?.name || fallbackName);
+
       // Fetch enrolled courses with course and semester info
       const { data, error } = await supabase
         .from('Student_Enrolled_Courses')
         .select(`
           course_id,
           Courses (
-            id,
+            course_id,
             dept,
             course_number,
             title
           ),
           Semesters (
-            id,
+            semester_id,
             term,
             year
           )
         `)
-        .eq('user_id', session.user.id);
+        .eq('author_id', session.user.id);
 
         console.log('Session user ID:', session.user.id);
         console.log('Raw data:', data);
@@ -108,28 +127,37 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
       // Get note and member counts per course
       console.log('Data before mapping:', data);
 
-      const classes = await Promise.all((data || []).map(async (row: EnrolledCourseRow) => {
-        const course = row.Courses as any;
-        const semester = row.Semesters as any;
+      const rows = (data || []) as EnrolledCourseRow[];
+
+      const classes = await Promise.all(rows.map(async (row) => {
+        const course = Array.isArray(row.Courses) ? row.Courses[0] : row.Courses;
+        const semester = Array.isArray(row.Semesters) ? row.Semesters[0] : row.Semesters;
 
         console.log('Processing row:', row);
         console.log('Course:', course);
         console.log('Semester:', semester);
 
+        if (!course || !semester) {
+          return null;
+        }
+
+        // Some Supabase schemas expose course primary key as `course_id` instead of `id`.
+        const courseDbId = course.course_id ?? row.course_id;
+
         // Count notes for this course
         const { count: noteCount } = await supabase
           .from('Posts')
           .select('*', { count: 'exact', head: true })
-          .eq('course_id', course.id);
+          .eq('course_id', courseDbId);
 
         // Count enrolled students for this course
         const { count: memberCount } = await supabase
           .from('Student_Enrolled_Courses')
           .select('*', { count: 'exact', head: true })
-          .eq('course_id', course.id);
+          .eq('course_id', courseDbId);
 
         return {
-          id: String(course.id),
+          id: String(courseDbId),
           code: `${course.dept} ${course.course_number}`,
           name: course.title,
           semester: `${semester.term} ${semester.year}`,
@@ -138,7 +166,7 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         };
       }));
 
-      setEnrolledClasses(classes);
+      setEnrolledClasses(classes.filter((course): course is ClassData => course !== null));
       setLoading(false);
     };
 
@@ -158,13 +186,13 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
   );
 
   return (
-    <div className="max-w-6xl mx-auto p-6 bg-white min-h-screen">
+    <div className="w-full min-h-screen bg-white px-6 py-6">
       <div className="mb-10">
         <h1 className="text-3xl font-extrabold text-gray-900 mb-2 tracking-tight">
           My Classes
         </h1>
         <p className="text-gray-600">
-          Access shared notes and collaborative materials for your UMass courses.
+          {userName ? `Welcome, ${userName}. ` : ''}Access shared notes and collaborative materials for your UMass courses.
         </p>
       </div>
 

@@ -103,8 +103,8 @@ export default function Home() {
 
           {/*Desktop nav*/}
           <div className="hidden md:flex items-center gap-6">
-            <Link href="/about" className="text-white/80 hover:text-white transition text-sm font-medium">About</Link>
-            <Link href="/login" className="text-white/80 hover:text-white transition text-sm font-medium">Sign In</Link>
+            <Link href="#why-unotes" className="text-white/80 hover:text-white transition text-sm font-medium">About</Link>
+            <Link href="/auth/google" className="text-white/80 hover:text-white transition text-sm font-medium">Sign In</Link>
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
               className="p-2 hover:bg-white/10 rounded-lg transition"
@@ -157,8 +157,8 @@ export default function Home() {
                 </button>
               </div>
               <div className="space-y-2">
-                <Link href="/about" className="block py-3 px-4 hover:bg-white/10 rounded-lg transition" onClick={() => setIsMobileMenuOpen(false)}>About</Link>
-                <Link href="/login" className="block py-3 px-4 hover:bg-white/10 rounded-lg transition" onClick={() => setIsMobileMenuOpen(false)}>Sign In</Link>
+                <Link href="#why-unotes" className="block py-3 px-4 hover:bg-white/10 rounded-lg transition" onClick={() => setIsMobileMenuOpen(false)}>About</Link>
+                <Link href="/auth/google" className="block py-3 px-4 hover:bg-white/10 rounded-lg transition" onClick={() => setIsMobileMenuOpen(false)}>Sign In</Link>
               </div>
             </div>
           </div>
@@ -208,7 +208,7 @@ export default function Home() {
       </section>
 
       {/*Why UNotes*/}
-      <section className="bg-white dark:bg-gray-950 py-20 transition-colors">
+      <section id="why-unotes" className="bg-white dark:bg-gray-950 py-20 transition-colors">
         <div className="max-w-5xl mx-auto px-6">
           <h2 className="text-3xl md:text-4xl font-bold text-center text-gray-900 dark:text-white mb-14 transition-colors">
             Why UNotes?

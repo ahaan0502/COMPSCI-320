@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { useRouter } from 'next/navigation';
+
+const redirectTo = (path: string) => {
+  window.location.replace(path);
+};
 
 export default function AuthCallback() {
-  const router = useRouter();
+  const [message, setMessage] = useState('Signing you in...');
 
   useEffect(() => {
     const supabase = createBrowserClient(
@@ -13,42 +16,84 @@ export default function AuthCallback() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const handleAuth = async () => {
-      const hash = window.location.hash;
+    const syncUserProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
 
-      if (hash) {
-        const params = new URLSearchParams(hash.substring(1));
-        const access_token = params.get('access_token');
-        const refresh_token = params.get('refresh_token');
-
-        if (access_token && refresh_token) {
-          const { data, error } = await supabase.auth.setSession({
-            access_token,
-            refresh_token,
-          });
-
-          console.log('Set session data:', data);
-          console.log('Set session error:', error);
-
-          if (data.user) {
-            await supabase.from('Users').upsert({
-              uuid: data.user.id,
-              email: data.user.email,
-              name: data.user.user_metadata?.full_name,
-              created_at: new Date().toISOString(),
-            }, { onConflict: 'uuid' });
-
-            router.push('/classes');
-            return;
-          }
-        }
+      if (!user) {
+        redirectTo('/');
+        return;
       }
 
-      router.push('/landing');
+      const name =
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        user.email?.split('@')[0] ||
+        'User';
+
+      const { error } = await supabase.from('Users').upsert({
+        author_id: user.id,
+        email: user.email,
+        name,
+        created_at: new Date().toISOString(),
+      }, { onConflict: 'author_id' });
+
+      if (error) {
+        console.error('Failed to upsert user profile:', error);
+      }
+
+      redirectTo('/classes');
+    };
+
+    const handleAuth = async () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const code = searchParams.get('code');
+      const hash = window.location.hash ? new URLSearchParams(window.location.hash.substring(1)) : null;
+      const accessToken = hash?.get('access_token');
+      const refreshToken = hash?.get('refresh_token');
+
+      try {
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+          if (error) {
+            throw error;
+          }
+
+          await syncUserProfile();
+          return;
+        }
+
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) {
+            throw error;
+          }
+
+          await syncUserProfile();
+          return;
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session?.user) {
+          await syncUserProfile();
+          return;
+        }
+
+        redirectTo('/');
+      } catch (error) {
+        console.error('Authentication callback failed:', error);
+        setMessage('Sign-in failed. Redirecting...');
+        redirectTo('/');
+      }
     };
 
     handleAuth();
-  }, [router]);
+  }, []);
 
-  return <p>Signing you in...</p>;
+  return <p>{message}</p>;
 }
