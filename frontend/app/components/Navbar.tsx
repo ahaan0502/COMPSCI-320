@@ -6,7 +6,7 @@ export default function Navbar() {
 		<header className="sticky top-0 z-40 border-b border-zinc-200 bg-zinc-100/95 backdrop-blur">
 			<nav className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
 				<Link
-					href="#"
+					href="/"
 					className="text-3xl font-semibold tracking-tight text-zinc-800 transition hover:text-zinc-950"
 				>
 					UNotes
@@ -14,27 +14,27 @@ export default function Navbar() {
 
 				<div className="hidden items-center gap-7 md:flex">
 					<Link
-						href="#"
+						href="/classes"
 						className="inline-flex items-center gap-2 text-[18px] font-medium text-zinc-600 transition hover:text-zinc-900"
 					>
-						<BookOpen className="h-[18px] w-[18px]" aria-hidden="true" />
+						<BookOpen className="h-4.5 w-4.5" aria-hidden="true" />
 						<span>My Classes</span>
 					</Link>
 					<Link
-						href="#"
+						href="/notes"
 						className="inline-flex items-center gap-2 text-[18px] font-medium text-zinc-600 transition hover:text-zinc-900"
 					>
-						<Bookmark className="h-[18px] w-[18px]" aria-hidden="true" />
+						<Bookmark className="h-4.5 w-4.5" aria-hidden="true" />
 						<span>Saved Notes</span>
 					</Link>
 				</div>
 
 				<div className="flex items-center gap-3">
 					<Link
-						href="#"
+						href="/notes"
 						className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-base font-semibold text-white transition hover:bg-red-900"
 					>
-						<Plus className="h-[18px] w-[18px]" aria-hidden="true" />
+						<Plus className="h-4.5 w-4.5" aria-hidden="true" />
 						<span className="hidden sm:inline">Post Notes</span>
 					</Link>
 
