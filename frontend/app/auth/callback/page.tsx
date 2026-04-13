@@ -1,35 +1,99 @@
 'use client';
 
-import { useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { useEffect, useState } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
+
+const redirectTo = (path: string) => {
+  window.location.replace(path);
+};
 
 export default function AuthCallback() {
+  const [message, setMessage] = useState('Signing you in...');
+
   useEffect(() => {
-    const supabase = createClient(
+    const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event);
-      console.log('Session:', session);
-      console.log('User:', session?.user);
+    const syncUserProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
 
-      if (session?.user) {
-        const user = session.user;
-
-        const { data, error } = await supabase.from('Users').upsert({
-          uuid: user.id,
-          email: user.email,
-          name: user.user_metadata?.full_name,
-          created_at: new Date().toISOString(),
-        }, { onConflict: 'uuid' });
-
-        console.log('Upsert data:', data);
-        console.log('Upsert error:', error);
+      if (!user) {
+        redirectTo('/');
+        return;
       }
-    });
+
+      const name =
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        user.email?.split('@')[0] ||
+        'User';
+
+      const { error } = await supabase.from('Users').upsert({
+        author_id: user.id,
+        email: user.email,
+        name,
+        created_at: new Date().toISOString(),
+      }, { onConflict: 'author_id' });
+
+      if (error) {
+        console.error('Failed to upsert user profile:', error);
+      }
+
+      redirectTo('/classes');
+    };
+
+    const handleAuth = async () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const code = searchParams.get('code');
+      const hash = window.location.hash ? new URLSearchParams(window.location.hash.substring(1)) : null;
+      const accessToken = hash?.get('access_token');
+      const refreshToken = hash?.get('refresh_token');
+
+      try {
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+          if (error) {
+            throw error;
+          }
+
+          await syncUserProfile();
+          return;
+        }
+
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) {
+            throw error;
+          }
+
+          await syncUserProfile();
+          return;
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session?.user) {
+          await syncUserProfile();
+          return;
+        }
+
+        redirectTo('/');
+      } catch (error) {
+        console.error('Authentication callback failed:', error);
+        setMessage('Sign-in failed. Redirecting...');
+        redirectTo('/');
+      }
+    };
+
+    handleAuth();
   }, []);
 
-  return <p>Check the console — not redirecting yet</p>;
+  return <p>{message}</p>;
 }

@@ -1,7 +1,63 @@
+'use client';
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { createBrowserClient } from "@supabase/ssr";
 import { BookOpen, Bookmark, Plus, User } from "lucide-react";
 
+type AuthUser = {
+	name: string;
+	email: string | null;
+};
+
 export default function Navbar() {
+	const [user, setUser] = useState<AuthUser | null>(null);
+
+	useEffect(() => {
+		const supabase = createBrowserClient(
+			process.env.NEXT_PUBLIC_SUPABASE_URL!,
+			process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+		);
+
+		const loadUser = async () => {
+			const { data: { user: authUser } } = await supabase.auth.getUser();
+
+			if (!authUser) {
+				setUser(null);
+				return;
+			}
+
+			const fallbackName =
+				authUser.user_metadata?.full_name ||
+				authUser.user_metadata?.name ||
+				authUser.email?.split("@")[0] ||
+				"User";
+
+			const { data: profile } = await supabase
+				.from("Users")
+				.select("name, email")
+				.eq("author_id", authUser.id)
+				.maybeSingle();
+
+			setUser({
+				name: profile?.name || fallbackName,
+				email: profile?.email || authUser.email || null,
+			});
+		};
+
+		loadUser();
+
+		const {
+			data: { subscription },
+		} = supabase.auth.onAuthStateChange(() => {
+			loadUser();
+		});
+
+		return () => {
+			subscription.unsubscribe();
+		};
+	}, []);
+
 	return (
 		<header className="sticky top-0 z-40 border-b border-zinc-200 bg-zinc-100/95 backdrop-blur">
 			<nav className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -30,13 +86,15 @@ export default function Navbar() {
 				</div>
 
 				<div className="flex items-center gap-3">
-					<Link
-						href="/notes"
-						className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-base font-semibold text-white transition hover:bg-red-900"
-					>
-						<Plus className="h-4.5 w-4.5" aria-hidden="true" />
-						<span className="hidden sm:inline">Post Notes</span>
-					</Link>
+					{user ? (
+						<>
+							<Link
+								href="/notes"
+								className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-base font-semibold text-white transition hover:bg-red-900"
+							>
+								<Plus className="h-4.5 w-4.5" aria-hidden="true" />
+								<span className="hidden sm:inline">Post Notes</span>
+							</Link>
 
 					<Link
 						href="/profile"

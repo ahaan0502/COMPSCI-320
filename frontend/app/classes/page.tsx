@@ -192,19 +192,16 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
   );
 
   return (
-    <div className="max-w-6xl mx-auto p-6 bg-white min-h-screen">
-     
-      {/* Header Section */}
+    <div className="w-full min-h-screen bg-white px-6 py-6">
       <div className="mb-10">
         <h1 className="text-3xl font-extrabold text-gray-900 mb-2 tracking-tight">
           My Classes
         </h1>
         <p className="text-gray-600">
-          Access shared notes and collaborative materials for your UMass courses.
+          {userName ? `Welcome, ${userName}. ` : ''}Access shared notes and collaborative materials for your UMass courses.
         </p>
       </div>
 
-      {/* Grid Section */}
       <div className="grid md:grid-cols-2 gap-6">
         {enrolledClasses.map((course) => (
           <div
@@ -244,7 +241,6 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         ))}
       </div>
 
-      {/* Empty State */}
       {enrolledClasses.length === 0 && (
         <div className="text-center py-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
           <div className="text-gray-300 flex justify-center mb-4">
@@ -262,7 +258,6 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
   );
 }
 
-// This is the "Entry Point" that Next.js looks for
 export default function Page() {
   const router = useRouter();
 
