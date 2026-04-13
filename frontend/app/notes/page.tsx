@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Search } from 'lucide-react';
 import NoteCard, { type NotePost, type PostVisibility } from '../components/NoteCard';
 
@@ -13,12 +14,6 @@ interface NotesFeedFilters {
 }
 
 const FEED_TABS: FeedTab[] = ['hot', 'new', 'top'];
-
-const SIDEBAR_FILTERS_FROM_COMPONENT: NotesFeedFilters = {
-  courseIds: [],
-  semesterIds: [],
-  visibility: [],
-};
 
 const MOCK_POSTS: NotePost[] = [
   {
@@ -34,12 +29,12 @@ const MOCK_POSTS: NotePost[] = [
     votes: 22,
     updated_at: '2026-04-07T13:00:00.000Z',
     is_deleted: false,
-    course_id: 311,
+    course_id: 320,
     semester_id: 20261,
     is_report: false,
     author_name: 'Emma Smith',
     author_email: 'emma.smith@umass.edu',
-    course_label: 'CS 311 - Algorithms',
+    course_label: 'COMPSCI 320 - Software Engineering',
     semester_label: 'Spring 2026',
     comments_count: 8,
   },
@@ -56,12 +51,12 @@ const MOCK_POSTS: NotePost[] = [
     votes: 31,
     updated_at: '2026-04-07T06:00:00.000Z',
     is_deleted: false,
-    course_id: 240,
+    course_id: 233,
     semester_id: 20261,
     is_report: false,
     author_name: 'Lisa Chen',
     author_email: 'lisa.chen@umass.edu',
-    course_label: 'CS 240 - Reasoning Under Uncertainty',
+    course_label: 'MATH 233 - Multivariate Calculus',
     semester_label: 'Spring 2026',
     comments_count: 6,
   },
@@ -78,12 +73,12 @@ const MOCK_POSTS: NotePost[] = [
     votes: 17,
     updated_at: '2026-04-06T18:00:00.000Z',
     is_deleted: false,
-    course_id: 235,
+    course_id: 515,
     semester_id: 20261,
     is_report: false,
     author_name: 'Mike Johnson',
     author_email: 'mike.johnson@umass.edu',
-    course_label: 'MATH 235 - Linear Algebra',
+    course_label: 'STAT 515 - Statistics I',
     semester_label: 'Spring 2026',
     comments_count: 4,
   },
@@ -168,9 +163,24 @@ function FiltersPlaceholder() {
 export default function NotesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FeedTab>('hot');
+  const searchParams = useSearchParams();
+
+  const classId = useMemo(() => {
+    const rawClassId = searchParams.get('classId');
+    if (!rawClassId) {
+      return null;
+    }
+
+    const parsedClassId = Number.parseInt(rawClassId, 10);
+    return Number.isNaN(parsedClassId) ? null : parsedClassId;
+  }, [searchParams]);
 
   // Keep this as a separate input object so sidebar component integration is a direct swap later.
-  const sidebarFilters = SIDEBAR_FILTERS_FROM_COMPONENT;
+  const sidebarFilters = useMemo<NotesFeedFilters>(() => ({
+    courseIds: classId === null ? [] : [classId],
+    semesterIds: [],
+    visibility: [],
+  }), [classId]);
 
   const filteredPosts = useMemo(
     () => applyFeedFilters(MOCK_POSTS, searchQuery, sidebarFilters),
