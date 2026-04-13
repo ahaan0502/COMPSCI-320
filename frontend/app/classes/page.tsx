@@ -1,6 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
+import { useRouter } from 'next/navigation';
 
 // Simplified SVG Icons
 const BookIcon = () => (
@@ -27,7 +29,7 @@ const UsersSmallIcon = () => (
 );
 
 interface ClassData {
-  id: string;
+  id: number;
   code: string;
   name: string;
   semester: string;
@@ -36,16 +38,158 @@ interface ClassData {
 }
 
 interface ClassesViewProps {
-  onClassSelect: (courseCode: string) => void;
+  onClassSelect: (classId: number) => void;
 }
 
+interface EnrolledCourseRow {
+  course_id: number;
+  Courses: {
+    id: number;
+    dept: string;
+    course_number: string;
+    title: string;
+  }[];
+  Semesters: {
+    id: number;
+    term: string;
+    year: string;
+  }[];
+}
+
+const demoClasses: ClassData[] = [
+  {
+    id: 320,
+    code: 'COMPSCI 320',
+    name: 'Software Engineering',
+    semester: 'Spring 2026',
+    noteCount: 18,
+    memberCount: 64,
+  },
+  {
+    id: 233,
+    code: 'MATH 233',
+    name: 'Multivariate Calculus',
+    semester: 'Spring 2026',
+    noteCount: 11,
+    memberCount: 52,
+  },
+  {
+    id: 515,
+    code: 'STAT 515',
+    name: 'Statistics I',
+    semester: 'Spring 2026',
+    noteCount: 9,
+    memberCount: 47,
+  },
+];
+
 export function ClassesView({ onClassSelect }: ClassesViewProps) {
-  const enrolledClasses: ClassData[] = [
-    { id: "1", code: "CS 220", name: "Programming Methodology", semester: "Spring 2026", noteCount: 45, memberCount: 128 },
-    { id: "2", code: "CS 311", name: "Algorithms", semester: "Spring 2026", noteCount: 38, memberCount: 95 },
-    { id: "3", code: "MATH 235", name: "Linear Algebra", semester: "Spring 2026", noteCount: 52, memberCount: 156 },
-    { id: "4", code: "CS 240", name: "Reasoning Under Uncertainty", semester: "Spring 2026", noteCount: 31, memberCount: 87 },
-  ];
+  const [enrolledClasses, setEnrolledClasses] = useState<ClassData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchClasses = async () => {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        setEnrolledClasses(demoClasses);
+        setLoading(false);
+        return;
+      }
+
+      const supabase = createBrowserClient(
+        supabaseUrl,
+        supabaseAnonKey
+      );
+
+      // Get current user
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        setEnrolledClasses(demoClasses);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch enrolled courses with course and semester info
+      const { data, error } = await supabase
+        .from('Student_Enrolled_Courses')
+        .select(`
+          course_id,
+          Courses (
+            id,
+            dept,
+            course_number,
+            title
+          ),
+          Semesters (
+            id,
+            term,
+            year
+          )
+        `)
+        .eq('user_id', session.user.id);
+
+        console.log('Session user ID:', session.user.id);
+        console.log('Raw data:', data);
+        console.log('Fetch error:', error);
+
+      if (error) {
+        console.error('Fetch error:', error);
+        setEnrolledClasses(demoClasses);
+        setLoading(false);
+        return;
+      }
+
+      // Get note and member counts per course
+      console.log('Data before mapping:', data);
+
+      const classes = await Promise.all((data || []).map(async (row: EnrolledCourseRow) => {
+        const course = row.Courses?.[0];
+        const semester = row.Semesters?.[0];
+
+        if (!course || !semester) {
+          return null;
+        }
+
+        console.log('Processing row:', row);
+        console.log('Course:', course);
+        console.log('Semester:', semester);
+
+        // Count notes for this course
+        const { count: noteCount } = await supabase
+          .from('Posts')
+          .select('*', { count: 'exact', head: true })
+          .eq('course_id', course.id);
+
+        // Count enrolled students for this course
+        const { count: memberCount } = await supabase
+          .from('Student_Enrolled_Courses')
+          .select('*', { count: 'exact', head: true })
+          .eq('course_id', course.id);
+
+        return {
+          id: course.id,
+          code: `${course.dept} ${course.course_number}`,
+          name: course.title,
+          semester: `${semester.term} ${semester.year}`,
+          noteCount: noteCount || 0,
+          memberCount: memberCount || 0,
+        };
+      }));
+
+      setEnrolledClasses(classes.filter((course): course is ClassData => course !== null));
+      setLoading(false);
+    };
+
+    fetchClasses();
+  }, []);
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <p className="text-gray-500">Loading your classes...</p>
+    </div>
+  );
 
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white min-h-screen">
@@ -65,12 +209,12 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         {enrolledClasses.map((course) => (
           <div
             key={course.id}
-            onClick={() => onClassSelect(`${course.code} - ${course.name}`)}
+            onClick={() => onClassSelect(course.id)}
             className="group cursor-pointer bg-white border border-gray-200 rounded-xl p-6 transition-all hover:shadow-lg hover:border-[#7A1F1F]"
           >
             <div className="flex justify-between items-start mb-4">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#7A1F1F] mb-1 block">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#7A1F1F] mb-1 block">
                   {course.semester}
                 </span>
                 <h2 className="text-2xl font-bold text-gray-900 group-hover:text-[#7A1F1F] transition-colors">
@@ -120,11 +264,12 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
 
 // This is the "Entry Point" that Next.js looks for
 export default function Page() {
+  const router = useRouter();
+
   return (
     <ClassesView
-      onClassSelect={(course) => {
-        console.log("Selected course:", course);
-        alert("Navigating to " + course);
+      onClassSelect={(classId) => {
+        router.push(`/notes?classId=${classId}`);
       }}
     />
   );

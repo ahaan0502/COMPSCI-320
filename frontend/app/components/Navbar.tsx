@@ -39,7 +39,7 @@ export default function Navbar() {
 					</Link>
 
 					<Link
-						href="#"
+						href="/profile"
 						aria-label="Profile"
 						className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 text-zinc-600 transition hover:bg-white hover:text-zinc-900"
 					>
