@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { createBrowserClient } from '@supabase/ssr';
 import NoteCard, { type NotePost, type PostVisibility } from '../components/NoteCard';
@@ -11,6 +11,46 @@ interface NotesFeedFilters {
   courseIds: number[];
   semesterIds: number[];
   visibility: PostVisibility[];
+}
+
+interface SupabasePostRow {
+  post_id: number;
+  created_at: string;
+  author_id: string;
+  title: string | null;
+  body: string | null;
+  purpose: string | null;
+  visibility: PostVisibility;
+  group_id: number | null;
+  tags: string[];
+  votes: number | null;
+  updated_at: string;
+  course_id: number | null;
+  semester_id: number | null;
+  is_report: boolean | null;
+  Users: {
+    name: string | null;
+    email: string | null;
+  }[] | {
+    name: string | null;
+    email: string | null;
+  } | null;
+  Courses: {
+    dept: string | null;
+    course_number: string | null;
+    title: string | null;
+  }[] | {
+    dept: string | null;
+    course_number: string | null;
+    title: string | null;
+  } | null;
+  Semesters: {
+    term: string | null;
+    year: string | null;
+  }[] | {
+    term: string | null;
+    year: string | null;
+  } | null;
 }
 
 const FEED_TABS: FeedTab[] = ['hot', 'new', 'top'];
@@ -186,28 +226,34 @@ function NotesPageContent() {
         return;
       }
 
-      const mapped: NotePost[] = (postsData || []).map((post: any) => ({
-        id: post.post_id,
-        created_at: post.created_at,
-        author_id: post.author_id,
-        title: post.title ?? '',
-        body: post.body ?? '',
-        purpose: post.purpose,
-        visibility: post.visibility as PostVisibility,
-        group_id: post.group_id,
-        tags: post.tags,
-        votes: post.votes ?? 0,
-        updated_at: post.updated_at,
-        is_deleted: false,
-        course_id: post.course_id,
-        semester_id: post.semester_id,
-        is_report: post.is_report ?? false,
-        author_name: post.Users?.name ?? 'Unknown',
-        author_email: post.Users?.email ?? '',
-        course_label: `${post.Courses?.dept} ${post.Courses?.course_number} - ${post.Courses?.title}`,
-        semester_label: `${post.Semesters?.term} ${post.Semesters?.year}`,
-        comments_count: 0,
-      }));
+      const mapped: NotePost[] = ((postsData || []) as SupabasePostRow[]).map((post) => {
+        const user = Array.isArray(post.Users) ? post.Users[0] : post.Users;
+        const course = Array.isArray(post.Courses) ? post.Courses[0] : post.Courses;
+        const semester = Array.isArray(post.Semesters) ? post.Semesters[0] : post.Semesters;
+
+        return {
+          id: post.post_id,
+          created_at: post.created_at,
+          author_id: post.author_id,
+          title: post.title ?? '',
+          body: post.body ?? '',
+          purpose: post.purpose,
+          visibility: post.visibility as PostVisibility,
+          group_id: post.group_id,
+          tags: post.tags,
+          votes: post.votes ?? 0,
+          updated_at: post.updated_at,
+          is_deleted: false,
+          course_id: post.course_id,
+          semester_id: post.semester_id,
+          is_report: post.is_report ?? false,
+          author_name: user?.name ?? 'Unknown',
+          author_email: user?.email ?? '',
+          course_label: `${course?.dept ?? ''} ${course?.course_number ?? ''} - ${course?.title ?? ''}`,
+          semester_label: `${semester?.term ?? ''} ${semester?.year ?? ''}`,
+          comments_count: 0,
+        };
+      });
 
       setPosts(mapped);
       setLoading(false);
