@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
+import { createBrowserClient } from '@supabase/ssr';
 import NoteCard, { type NotePost, type PostVisibility } from '../components/NoteCard';
 
 type FeedTab = 'hot' | 'new' | 'top';
@@ -15,99 +15,29 @@ interface NotesFeedFilters {
 
 const FEED_TABS: FeedTab[] = ['hot', 'new', 'top'];
 
-const MOCK_POSTS: NotePost[] = [
-  {
-    id: 1,
-    created_at: '2026-04-07T13:00:00.000Z',
-    author_id: '7f86f886-75f7-46f3-a43d-53f0b40c2ca1',
-    title: 'Question about Dynamic Programming',
-    body: "Can someone explain the intuition behind the knapsack problem? I understand the recursive formula but I'm struggling to see why it works. Any help would be appreciated!",
-    purpose: 'question',
-    visibility: 'public',
-    group_id: null,
-    tags: ['algorithms', 'dynamic-programming', 'knapsack'],
-    votes: 22,
-    updated_at: '2026-04-07T13:00:00.000Z',
-    is_deleted: false,
-    course_id: 320,
-    semester_id: 20261,
-    is_report: false,
-    author_name: 'Emma Smith',
-    author_email: 'emma.smith@umass.edu',
-    course_label: 'COMPSCI 320 - Software Engineering',
-    semester_label: 'Spring 2026',
-    comments_count: 8,
-  },
-  {
-    id: 2,
-    created_at: '2026-04-07T06:00:00.000Z',
-    author_id: '644521fb-a43f-431f-9ab3-e83e3899f89c',
-    title: 'Study Group - Probability Review Session',
-    body: "Our study group is meeting this Thursday at 6pm in the library to review probability concepts. We'll go over conditional probability, Bayes theorem, and practice problems. DM me if you want to join!",
-    purpose: 'study-group',
-    visibility: 'private',
-    group_id: 19,
-    tags: ['probability', 'bayes-theorem', 'review'],
-    votes: 31,
-    updated_at: '2026-04-07T06:00:00.000Z',
-    is_deleted: false,
-    course_id: 233,
-    semester_id: 20261,
-    is_report: false,
-    author_name: 'Lisa Chen',
-    author_email: 'lisa.chen@umass.edu',
-    course_label: 'MATH 233 - Multivariate Calculus',
-    semester_label: 'Spring 2026',
-    comments_count: 6,
-  },
-  {
-    id: 3,
-    created_at: '2026-04-06T18:00:00.000Z',
-    author_id: '4e0ca2ca-8d16-4892-81a1-3f6488f60f8b',
-    title: 'Linear Algebra Midterm Cheat Sheet',
-    body: 'I put together a one-page summary for eigenvalues, diagonalization, and orthogonality. Sharing this in case it helps anyone preparing for the midterm this week.',
-    purpose: 'resource',
-    visibility: 'public',
-    group_id: null,
-    tags: ['linear-algebra', 'midterm', 'cheatsheet'],
-    votes: 17,
-    updated_at: '2026-04-06T18:00:00.000Z',
-    is_deleted: false,
-    course_id: 515,
-    semester_id: 20261,
-    is_report: false,
-    author_name: 'Mike Johnson',
-    author_email: 'mike.johnson@umass.edu',
-    course_label: 'STAT 515 - Statistics I',
-    semester_label: 'Spring 2026',
-    comments_count: 4,
-  },
-];
+const SIDEBAR_FILTERS_FROM_COMPONENT: NotesFeedFilters = {
+  courseIds: [],
+  semesterIds: [],
+  visibility: [],
+};
 
 function applyFeedFilters(posts: NotePost[], searchQuery: string, filters: NotesFeedFilters): NotePost[] {
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
   return posts.filter((post) => {
-    if (post.is_deleted) {
-      return false;
-    }
+    if (post.is_deleted) return false;
 
     if (normalizedQuery.length > 0) {
       const inTitle = post.title.toLowerCase().includes(normalizedQuery);
       const inBody = post.body.toLowerCase().includes(normalizedQuery);
-      if (!inTitle && !inBody) {
-        return false;
-      }
+      if (!inTitle && !inBody) return false;
     }
 
     if (filters.courseIds.length > 0 && (post.course_id === null || !filters.courseIds.includes(post.course_id))) {
       return false;
     }
 
-    if (
-      filters.semesterIds.length > 0
-      && (post.semester_id === null || !filters.semesterIds.includes(post.semester_id))
-    ) {
+    if (filters.semesterIds.length > 0 && (post.semester_id === null || !filters.semesterIds.includes(post.semester_id))) {
       return false;
     }
 
@@ -119,11 +49,23 @@ function applyFeedFilters(posts: NotePost[], searchQuery: string, filters: Notes
   });
 }
 
+function sortPosts(posts: NotePost[], tab: FeedTab): NotePost[] {
+  switch (tab) {
+    case 'hot':
+      return [...posts].sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0));
+    case 'new':
+      return [...posts].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    case 'top':
+      return [...posts].sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0));
+    default:
+      return posts;
+  }
+}
+
 function FiltersPlaceholder() {
   return (
     <aside className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
       <h2 className="mb-6 text-3xl font-bold tracking-tight text-zinc-800">Filters</h2>
-
       <div className="space-y-6 text-zinc-700">
         <section>
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">Course</h3>
@@ -134,7 +76,6 @@ function FiltersPlaceholder() {
             <p>MATH 235 - Linear Algebra</p>
           </div>
         </section>
-
         <section>
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">Semester</h3>
           <div className="space-y-2 text-base">
@@ -143,7 +84,6 @@ function FiltersPlaceholder() {
             <p>Spring 2025</p>
           </div>
         </section>
-
         <section>
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">Visibility</h3>
           <div className="space-y-2 text-base">
@@ -152,9 +92,8 @@ function FiltersPlaceholder() {
           </div>
         </section>
       </div>
-
       <p className="mt-6 rounded-lg bg-zinc-100 p-3 text-sm text-zinc-600">
-        This component to be replaced by actual filter component (to be built by Althan I believe).
+        This component to be replaced by actual filter component.
       </p>
     </aside>
   );
@@ -163,28 +102,135 @@ function FiltersPlaceholder() {
 function NotesPageContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FeedTab>('hot');
-  const searchParams = useSearchParams();
+  const [posts, setPosts] = useState<NotePost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const classId = useMemo(() => {
-    const rawClassId = searchParams.get('classId');
-    if (!rawClassId) {
-      return null;
-    }
+  const sidebarFilters = SIDEBAR_FILTERS_FROM_COMPONENT;
 
-    const parsedClassId = Number.parseInt(rawClassId, 10);
-    return Number.isNaN(parsedClassId) ? null : parsedClassId;
-  }, [searchParams]);
+  useEffect(() => {
+    const fetchPosts = async () => {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
 
-  // Keep this as a separate input object so sidebar component integration is a direct swap later.
-  const sidebarFilters = useMemo<NotesFeedFilters>(() => ({
-    courseIds: classId === null ? [] : [classId],
-    semesterIds: [],
-    visibility: [],
-  }), [classId]);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        setError('Not logged in');
+        setLoading(false);
+        return;
+      }
+
+      const { data: enrolledData, error: enrolledError } = await supabase
+        .from('Student_Enrolled_Courses')
+        .select('course_id')
+        .eq('author_id', session.user.id);
+
+      if (enrolledError) {
+        console.error('Enrolled courses error:', enrolledError);
+        setError('Failed to load enrolled courses');
+        setLoading(false);
+        return;
+      }
+
+      const enrolledCourseIds = (enrolledData || []).map((row: { course_id: number }) => row.course_id);
+
+      if (enrolledCourseIds.length === 0) {
+        setPosts([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: postsData, error: postsError } = await supabase
+        .from('Posts')
+        .select(`
+          post_id,
+          created_at,
+          author_id,
+          title,
+          body,
+          purpose,
+          visibility,
+          group_id,
+          tags,
+          votes,
+          updated_at,
+          course_id,
+          semester_id,
+          is_report,
+          attachment_url,
+          Users (
+            name,
+            email
+          ),
+          Courses (
+            course_id,
+            dept,
+            course_number,
+            title
+          ),
+          Semesters (
+            semester_id,
+            term,
+            year
+          )
+        `)
+        .in('course_id', enrolledCourseIds)
+        .eq('is_report', false);
+
+      if (postsError) {
+        console.error('Posts error:', postsError);
+        setError('Failed to load posts');
+        setLoading(false);
+        return;
+      }
+
+      const mapped: NotePost[] = (postsData || []).map((post: any) => ({
+        id: post.post_id,
+        created_at: post.created_at,
+        author_id: post.author_id,
+        title: post.title ?? '',
+        body: post.body ?? '',
+        purpose: post.purpose,
+        visibility: post.visibility as PostVisibility,
+        group_id: post.group_id,
+        tags: post.tags,
+        votes: post.votes ?? 0,
+        updated_at: post.updated_at,
+        is_deleted: false,
+        course_id: post.course_id,
+        semester_id: post.semester_id,
+        is_report: post.is_report ?? false,
+        author_name: post.Users?.name ?? 'Unknown',
+        author_email: post.Users?.email ?? '',
+        course_label: `${post.Courses?.dept} ${post.Courses?.course_number} - ${post.Courses?.title}`,
+        semester_label: `${post.Semesters?.term} ${post.Semesters?.year}`,
+        comments_count: 0,
+      }));
+
+      setPosts(mapped);
+      setLoading(false);
+    };
+
+    fetchPosts();   
+  }, []);
 
   const filteredPosts = useMemo(
-    () => applyFeedFilters(MOCK_POSTS, searchQuery, sidebarFilters),
-    [searchQuery, sidebarFilters],
+    () => sortPosts(applyFeedFilters(posts, searchQuery, sidebarFilters), activeTab),
+    [searchQuery, sidebarFilters, posts, activeTab],
+  );
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <p className="text-zinc-500">Loading posts...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <p className="text-red-500">{error}</p>
+    </div>
   );
 
   return (
@@ -210,7 +256,6 @@ function NotesPageContent() {
             <div className="mt-4 flex items-center gap-2">
               {FEED_TABS.map((tab) => {
                 const isActive = tab === activeTab;
-
                 return (
                   <button
                     key={tab}
