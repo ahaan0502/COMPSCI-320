@@ -85,39 +85,35 @@ export default function Navbar() {
 					</Link>
 				</div>
 
-				<div className="flex items-center gap-3">
-					{user ? (
-						<>
-							<Link
-								href="/notes"
-								className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-base font-semibold text-white transition hover:bg-red-900"
+					<div className="flex items-center gap-3">
+						{user ? (
+							<>
+								<Link
+									href="/notes"
+									className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-base font-semibold text-white transition hover:bg-red-900"
 							>
-								<Plus className="h-4.5 w-4.5" aria-hidden="true" />
-								<span className="hidden sm:inline">Post Notes</span>
-							</Link>
+									<Plus className="h-4.5 w-4.5" aria-hidden="true" />
+									<span className="hidden sm:inline">Post Notes</span>
+								</Link>
 
+								<Link
+									href="/profile"
+									aria-label="Profile"
+									className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 text-zinc-600 transition hover:bg-white hover:text-zinc-900"
+								>
+									<User className="h-5 w-5" aria-hidden="true" />
+								</Link>
+							</>
+						) : (
 							<Link
-								href="/profile"
-								aria-label="Profile"
-								className="inline-flex items-center gap-3 rounded-full border border-zinc-300 px-3 py-2 text-zinc-600 transition hover:bg-white hover:text-zinc-900"
+								href="/auth/google"
+								className="inline-flex items-center rounded-lg bg-red-800 px-4 py-2 text-base font-semibold text-white transition hover:bg-red-900"
 							>
-								<span className="hidden max-w-32 truncate text-sm font-medium sm:inline">
-									{user.name}
-								</span>
-								<User className="h-5 w-5" aria-hidden="true" />
+								Sign In
 							</Link>
-						</>
-					) : (
-						<Link
-							href="/auth/google"
-							className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-base font-semibold text-white transition hover:bg-red-900"
-						>
-							<User className="h-4.5 w-4.5" aria-hidden="true" />
-							<span>Sign In</span>
-						</Link>
-					)}
-				</div>
-			</nav>
-		</header>
-	);
+						)}
+					</div>
+				</nav>
+			</header>
+		);
 }

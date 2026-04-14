@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
+import { useRouter } from 'next/navigation';
 
 // Simplified SVG Icons
 const BookIcon = () => (
@@ -28,7 +29,7 @@ const UsersSmallIcon = () => (
 );
 
 interface ClassData {
-  id: string;
+  id: number;
   code: string;
   name: string;
   semester: string;
@@ -37,18 +38,18 @@ interface ClassData {
 }
 
 interface ClassesViewProps {
-  onClassSelect: (courseCode: string) => void;
+  onClassSelect: (classId: number) => void;
 }
 
 interface CourseRecord {
-  course_id?: number;
+  course_id: number;
   dept: string;
   course_number: string;
   title: string;
 }
 
 interface SemesterRecord {
-  semester_id?: number;
+  semester_id: number;
   term: string;
   year: string;
 }
@@ -59,32 +60,69 @@ interface EnrolledCourseRow {
   Semesters: SemesterRecord[] | SemesterRecord | null;
 }
 
+const demoClasses: ClassData[] = [
+  {
+    id: 320,
+    code: 'COMPSCI 320',
+    name: 'Software Engineering',
+    semester: 'Spring 2026',
+    noteCount: 18,
+    memberCount: 64,
+  },
+  {
+    id: 233,
+    code: 'MATH 233',
+    name: 'Multivariate Calculus',
+    semester: 'Spring 2026',
+    noteCount: 11,
+    memberCount: 52,
+  },
+  {
+    id: 515,
+    code: 'STAT 515',
+    name: 'Statistics I',
+    semester: 'Spring 2026',
+    noteCount: 9,
+    memberCount: 47,
+  },
+];
+
 export function ClassesView({ onClassSelect }: ClassesViewProps) {
   const [enrolledClasses, setEnrolledClasses] = useState<ClassData[]>([]);
-  const [userName, setUserName] = useState<string>('');
+  const [userName, setUserName] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchClasses = async () => {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        setEnrolledClasses(demoClasses);
+        setUserName('');
+        setLoading(false);
+        return;
+      }
+
       const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        supabaseUrl,
+        supabaseAnonKey
       );
 
       // Get current user
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
-        setError('Not logged in');
+        setEnrolledClasses(demoClasses);
+        setUserName('');
         setLoading(false);
         return;
       }
 
       const fallbackName =
-        session.user.user_metadata?.full_name ||
         session.user.user_metadata?.name ||
+        session.user.user_metadata?.full_name ||
         session.user.email?.split('@')[0] ||
-        'User';
+        '';
 
       const { data: profile } = await supabase
         .from('Users')
@@ -119,7 +157,7 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
 
       if (error) {
         console.error('Fetch error:', error);
-        setError('Failed to load classes');
+        setEnrolledClasses(demoClasses);
         setLoading(false);
         return;
       }
@@ -133,31 +171,28 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         const course = Array.isArray(row.Courses) ? row.Courses[0] : row.Courses;
         const semester = Array.isArray(row.Semesters) ? row.Semesters[0] : row.Semesters;
 
-        console.log('Processing row:', row);
-        console.log('Course:', course);
-        console.log('Semester:', semester);
-
         if (!course || !semester) {
           return null;
         }
 
-        // Some Supabase schemas expose course primary key as `course_id` instead of `id`.
-        const courseDbId = course.course_id ?? row.course_id;
+        console.log('Processing row:', row);
+        console.log('Course:', course);
+        console.log('Semester:', semester);
 
         // Count notes for this course
         const { count: noteCount } = await supabase
           .from('Posts')
           .select('*', { count: 'exact', head: true })
-          .eq('course_id', courseDbId);
+          .eq('course_id', course.course_id);
 
         // Count enrolled students for this course
         const { count: memberCount } = await supabase
           .from('Student_Enrolled_Courses')
           .select('*', { count: 'exact', head: true })
-          .eq('course_id', courseDbId);
+          .eq('course_id', course.course_id);
 
         return {
-          id: String(courseDbId),
+          id: course.course_id,
           code: `${course.dept} ${course.course_number}`,
           name: course.title,
           semester: `${semester.term} ${semester.year}`,
@@ -179,12 +214,6 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
     </div>
   );
 
-  if (error) return (
-    <div className="flex items-center justify-center min-h-screen">
-      <p className="text-red-500">{error}</p>
-    </div>
-  );
-
   return (
     <div className="w-full min-h-screen bg-white px-6 py-6">
       <div className="mb-10">
@@ -200,12 +229,12 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         {enrolledClasses.map((course) => (
           <div
             key={course.id}
-            onClick={() => onClassSelect(`${course.code} - ${course.name}`)}
+            onClick={() => onClassSelect(course.id)}
             className="group cursor-pointer bg-white border border-gray-200 rounded-xl p-6 transition-all hover:shadow-lg hover:border-[#7A1F1F]"
           >
             <div className="flex justify-between items-start mb-4">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#7A1F1F] mb-1 block">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#7A1F1F] mb-1 block">
                   {course.semester}
                 </span>
                 <h2 className="text-2xl font-bold text-gray-900 group-hover:text-[#7A1F1F] transition-colors">
@@ -253,10 +282,12 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
 }
 
 export default function Page() {
+  const router = useRouter();
+
   return (
     <ClassesView
-      onClassSelect={(course) => {
-        console.log('Selected course:', course);
+      onClassSelect={(classId) => {
+        router.push(`/notes?classId=${classId}`);
       }}
     />
   );

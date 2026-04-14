@@ -99,7 +99,7 @@ function FiltersPlaceholder() {
   );
 }
 
-export default function NotesPage() {
+function NotesPageContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FeedTab>('hot');
   const [posts, setPosts] = useState<NotePost[]>([]);
@@ -287,5 +287,13 @@ export default function NotesPage() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function NotesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-[calc(100vh-4rem)] bg-zinc-100" />}>
+      <NotesPageContent />
+    </Suspense>
   );
 }
