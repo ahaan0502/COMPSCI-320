@@ -56,7 +56,7 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
   const [activeTab, setActiveTab] = useState<TabType>('posts');
   
   // Content State (This only removes from the USER'S view/history)
-  const [userPosts, setUserPosts] = useState(initialPosts);
+  const [userPosts] = useState(initialPosts);
   const [likedPosts, setLikedPosts] = useState(initialLiked);
   const [userComments, setUserComments] = useState(initialComments);
 
@@ -212,7 +212,7 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
                     Remove Comment
                   </button>
                 </div>
-                <p className="text-gray-700 font-medium py-1">"{comment.content}"</p>
+                <p className="text-gray-700 font-medium py-1">&quot;{comment.content}&quot;</p>
                 <p className="text-[10px] text-gray-400 mt-2 font-bold">{comment.date}</p>
               </div>
             ))

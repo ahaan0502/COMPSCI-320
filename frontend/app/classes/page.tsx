@@ -41,19 +41,23 @@ interface ClassesViewProps {
   onClassSelect: (classId: number) => void;
 }
 
+interface CourseRecord {
+  course_id: number;
+  dept: string;
+  course_number: string;
+  title: string;
+}
+
+interface SemesterRecord {
+  semester_id: number;
+  term: string;
+  year: string;
+}
+
 interface EnrolledCourseRow {
   course_id: number;
-  Courses: {
-    id: number;
-    dept: string;
-    course_number: string;
-    title: string;
-  }[];
-  Semesters: {
-    id: number;
-    term: string;
-    year: string;
-  }[];
+  Courses: CourseRecord[] | CourseRecord | null;
+  Semesters: SemesterRecord[] | SemesterRecord | null;
 }
 
 const demoClasses: ClassData[] = [
@@ -85,6 +89,7 @@ const demoClasses: ClassData[] = [
 
 export function ClassesView({ onClassSelect }: ClassesViewProps) {
   const [enrolledClasses, setEnrolledClasses] = useState<ClassData[]>([]);
+  const [userName, setUserName] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -94,6 +99,7 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
 
       if (!supabaseUrl || !supabaseAnonKey) {
         setEnrolledClasses(demoClasses);
+        setUserName('');
         setLoading(false);
         return;
       }
@@ -107,9 +113,24 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         setEnrolledClasses(demoClasses);
+        setUserName('');
         setLoading(false);
         return;
       }
+
+      const fallbackName =
+        session.user.user_metadata?.name ||
+        session.user.user_metadata?.full_name ||
+        session.user.email?.split('@')[0] ||
+        '';
+
+      const { data: profile } = await supabase
+        .from('Users')
+        .select('name')
+        .eq('author_id', session.user.id)
+        .maybeSingle();
+
+      setUserName(profile?.name || fallbackName);
 
       // Fetch enrolled courses with course and semester info
       const { data, error } = await supabase
@@ -117,18 +138,18 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         .select(`
           course_id,
           Courses (
-            id,
+            course_id,
             dept,
             course_number,
             title
           ),
           Semesters (
-            id,
+            semester_id,
             term,
             year
           )
         `)
-        .eq('user_id', session.user.id);
+        .eq('author_id', session.user.id);
 
         console.log('Session user ID:', session.user.id);
         console.log('Raw data:', data);
@@ -144,9 +165,11 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
       // Get note and member counts per course
       console.log('Data before mapping:', data);
 
-      const classes = await Promise.all((data || []).map(async (row: EnrolledCourseRow) => {
-        const course = row.Courses?.[0];
-        const semester = row.Semesters?.[0];
+      const rows = (data || []) as EnrolledCourseRow[];
+
+      const classes = await Promise.all(rows.map(async (row) => {
+        const course = Array.isArray(row.Courses) ? row.Courses[0] : row.Courses;
+        const semester = Array.isArray(row.Semesters) ? row.Semesters[0] : row.Semesters;
 
         if (!course || !semester) {
           return null;
@@ -160,16 +183,16 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         const { count: noteCount } = await supabase
           .from('Posts')
           .select('*', { count: 'exact', head: true })
-          .eq('course_id', course.id);
+          .eq('course_id', course.course_id);
 
         // Count enrolled students for this course
         const { count: memberCount } = await supabase
           .from('Student_Enrolled_Courses')
           .select('*', { count: 'exact', head: true })
-          .eq('course_id', course.id);
+          .eq('course_id', course.course_id);
 
         return {
-          id: course.id,
+          id: course.course_id,
           code: `${course.dept} ${course.course_number}`,
           name: course.title,
           semester: `${semester.term} ${semester.year}`,
