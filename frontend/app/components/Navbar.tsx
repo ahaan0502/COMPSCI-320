@@ -12,6 +12,8 @@ type AuthUser = {
 
 export default function Navbar() {
 	const [user, setUser] = useState<AuthUser | null>(null);
+	const homeHref = user ? "/classes" : "/";
+
 
 	useEffect(() => {
 		const supabase = createBrowserClient(
@@ -62,7 +64,7 @@ export default function Navbar() {
 		<header className="sticky top-0 z-40 border-b border-zinc-200 bg-zinc-100/95 backdrop-blur">
 			<nav className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
 				<Link
-					href="/"
+					href={homeHref}
 					className="text-3xl font-semibold tracking-tight text-zinc-800 transition hover:text-zinc-950"
 				>
 					UNotes
