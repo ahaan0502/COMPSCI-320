@@ -36,11 +36,11 @@ interface SupabasePostRow {
     email: string | null;
   } | null;
   Courses: {
-    dept: string | null;
+    department_id: number | null;
     course_number: string | null;
     title: string | null;
   }[] | {
-    dept: string | null;
+    department_id: number | null;
     course_number: string | null;
     title: string | null;
   } | null;
@@ -206,7 +206,7 @@ function NotesPageContent() {
           ),
           Courses (
             course_id,
-            dept,
+            department_id,
             course_number,
             title
           ),
@@ -249,7 +249,7 @@ function NotesPageContent() {
           is_report: post.is_report ?? false,
           author_name: user?.name ?? 'Unknown',
           author_email: user?.email ?? '',
-          course_label: `${course?.dept ?? ''} ${course?.course_number ?? ''} - ${course?.title ?? ''}`,
+          course_label: `${course?.department_id ?? ''} ${course?.course_number ?? ''} - ${course?.title ?? ''}`,
           semester_label: `${semester?.term ?? ''} ${semester?.year ?? ''}`,
           comments_count: 0,
         };

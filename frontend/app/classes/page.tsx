@@ -43,7 +43,7 @@ interface ClassesViewProps {
 
 interface CourseRecord {
   course_id: number;
-  dept: string;
+  department_id: number;
   course_number: string;
   title: string;
 }
@@ -139,7 +139,7 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
           course_id,
           Courses (
             course_id,
-            dept,
+            department_id,
             course_number,
             title
           ),
@@ -193,7 +193,7 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
 
         return {
           id: course.course_id,
-          code: `${course.dept} ${course.course_number}`,
+          code: `${course.course_number}`,
           name: course.title,
           semester: `${semester.term} ${semester.year}`,
           noteCount: noteCount || 0,
@@ -203,10 +203,13 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
 
       setEnrolledClasses(classes.filter((course): course is ClassData => course !== null));
       setLoading(false);
+
     };
 
     fetchClasses();
   }, []);
+
+  const router = useRouter();
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen">
@@ -272,7 +275,8 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
           <p className="text-gray-500 font-medium">
             No classes found. Time to join some study groups!
           </p>
-          <button className="mt-4 text-[#7A1F1F] font-bold hover:underline">
+          <button onClick={() => router.push('/catalogue/departments')}
+          className="mt-4 text-[#7A1F1F] font-bold hover:underline">
             Browse Course Catalog
           </button>
         </div>
