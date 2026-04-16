@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { redirect } from 'next/navigation';
+import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
   const supabase = createClient(
@@ -17,12 +17,10 @@ export async function GET(request: Request) {
     },
   });
 
-  if (error) {
+  if (error || !data.url) {
     console.error('Google sign-in failed to start:', error);
-    redirect('/');
+    return NextResponse.redirect(new URL('/?error=oauth-failed', siteUrl));
   }
 
-  if (data.url) redirect(data.url);
-
-  redirect('/');
+  return NextResponse.redirect(data.url);
 }
