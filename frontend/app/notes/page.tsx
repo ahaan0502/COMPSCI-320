@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { Search } from 'lucide-react';
 import { createBrowserClient } from '@supabase/ssr';
 import NoteCard, { type NotePost, type PostVisibility } from '../components/NoteCard';
@@ -166,7 +166,7 @@ function NotesPageContent() {
           ),
           Courses (
             course_id,
-            dept,
+            department_id,
             course_number,
             title
           ),
@@ -204,7 +204,7 @@ function NotesPageContent() {
         is_report: post.is_report ?? false,
         author_name: post.Users?.name ?? 'Unknown',
         author_email: post.Users?.email ?? '',
-        course_label: `${post.Courses?.dept} ${post.Courses?.course_number} - ${post.Courses?.title}`,
+        course_label: `${post.Courses?.department_id} ${post.Courses?.course_number} - ${post.Courses?.title}`,
         semester_label: `${post.Semesters?.term} ${post.Semesters?.year}`,
         comments_count: 0,
       }));

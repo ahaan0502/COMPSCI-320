@@ -61,7 +61,7 @@ export function SavedNotesView({
           </h1>
         </div>
         <p className="text-gray-600">
-          Quickly access notes you've bookmarked for later.
+          Quickly access notes you&apos;ve bookmarked for later.
         </p>
       </div>
 
