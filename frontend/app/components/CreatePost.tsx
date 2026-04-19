@@ -7,26 +7,27 @@ interface CreatePostProps {
   onSuccess?: () => void;
 }
 
-interface Course {
-  course_id: number;
-  course_number: string;
-  title: string;
-}
-
-interface Semester {
-  semester_id: number;
-  term: string;
-  year: number | string;
-}
-
 interface EnrolledCourseRow {
   course_id: number;
-  Courses: Course[] | Course | null;
-}
-
-interface EnrolledSemesterRow {
   semester_id: number;
-  Semesters: Semester[] | Semester | null;
+  Courses: {
+    course_id: number;
+    course_number: string;
+    title: string;
+  }[] | {
+    course_id: number;
+    course_number: string;
+    title: string;
+  } | null;
+  Semesters: {
+    semester_id: number;
+    term: string;
+    year: number | string;
+  }[] | {
+    semester_id: number;
+    term: string;
+    year: number | string;
+  } | null;
 }
 
 const supabase = () =>
@@ -46,10 +47,8 @@ export function CreatePost({ onSuccess }: CreatePostProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [courseId, setCourseId] = useState('');
-  const [semesterId, setSemesterId] = useState('');
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [semesters, setSemesters] = useState<Semester[]>([]);
+  const [selectedEnrollment, setSelectedEnrollment] = useState('');
+  const [enrollments, setEnrollments] = useState<EnrolledCourseRow[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
 
   useEffect(() => {
@@ -68,28 +67,12 @@ export function CreatePost({ onSuccess }: CreatePostProps) {
           .from('Student_Enrolled_Courses')
           .select(`
             course_id,
+            semester_id,
             Courses (
               course_id,
               course_number,
               title
-            )
-          `)
-          .eq('author_id', session.user.id);
-
-        if (coursesError) {
-          console.error('Error fetching courses:', coursesError);
-          setError('Failed to load enrolled courses.');
-        } else {
-          const courseList = ((enrolledCourses || []) as EnrolledCourseRow[])
-            .map((row) => firstRelation(row.Courses))
-            .filter((course): course is Course => course !== null);
-          setCourses(courseList);
-        }
-
-        const { data: enrolledSemesters, error: semestersError } = await client
-          .from('Student_Enrolled_Courses')
-          .select(`
-            semester_id,
+            ),
             Semesters (
               semester_id,
               term,
@@ -98,19 +81,13 @@ export function CreatePost({ onSuccess }: CreatePostProps) {
           `)
           .eq('author_id', session.user.id);
 
-        if (semestersError) {
-          console.error('Error fetching semesters:', semestersError);
-          setError('Failed to load enrolled semesters.');
+        if (coursesError) {
+          console.error('Error fetching courses:', coursesError);
+          setError('Failed to load enrolled courses.');
         } else {
-          const seen = new Set<number>();
-          const semesterList = ((enrolledSemesters || []) as EnrolledSemesterRow[])
-            .map((row) => firstRelation(row.Semesters))
-            .filter((semester): semester is Semester => {
-              if (!semester || seen.has(semester.semester_id)) return false;
-              seen.add(semester.semester_id);
-              return true;
-            });
-          setSemesters(semesterList);
+          setEnrollments(((enrolledCourses || []) as EnrolledCourseRow[]).filter((row) => {
+            return firstRelation(row.Courses) !== null && firstRelation(row.Semesters) !== null;
+          }));
         }
       } finally {
         setIsLoadingOptions(false);
@@ -163,8 +140,7 @@ export function CreatePost({ onSuccess }: CreatePostProps) {
   const resetForm = () => {
     setTitle('');
     setContent('');
-    setCourseId('');
-    setSemesterId('');
+    setSelectedEnrollment('');
     setIsPublic(true);
     setSelectedFile(null);
 
@@ -183,10 +159,12 @@ export function CreatePost({ onSuccess }: CreatePostProps) {
       return;
     }
 
-    if (!courseId || !semesterId) {
-      setError('Course and semester are required.');
+    if (!selectedEnrollment) {
+      setError('Class is required.');
       return;
     }
+
+    const [courseId, semesterId] = selectedEnrollment.split(':').map(Number);
 
     setIsUploading(true);
     setError(null);
@@ -223,8 +201,8 @@ export function CreatePost({ onSuccess }: CreatePostProps) {
           tags: ['cics', 'notes'],
           votes: 0,
           updated_at: new Date().toISOString(),
-          course_id: Number(courseId),
-          semester_id: Number(semesterId),
+          course_id: courseId,
+          semester_id: semesterId,
           is_report: false,
           attachment_url: attachmentUrl,
         }]);
@@ -268,40 +246,36 @@ export function CreatePost({ onSuccess }: CreatePostProps) {
 
       <div className="mb-4">
         <label className="mb-1 block text-left text-lg font-medium text-gray-700 dark:text-gray-300">
-          Course
+          Class
         </label>
         <select
-          value={courseId}
-          onChange={(event) => setCourseId(event.target.value)}
+          value={selectedEnrollment}
+          onChange={(event) => setSelectedEnrollment(event.target.value)}
           disabled={isLoadingOptions}
           className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
         >
-          <option value="">Select a course</option>
-          {courses.map((course) => (
-            <option key={course.course_id} value={String(course.course_id)}>
-              {course.course_number} - {course.title}
-            </option>
-          ))}
-        </select>
-      </div>
+          <option value="">Select an enrolled class</option>
+          {enrollments.map((row) => {
+            const course = firstRelation(row.Courses);
+            const semester = firstRelation(row.Semesters);
 
-      <div className="mb-4">
-        <label className="mb-1 block text-left text-lg font-medium text-gray-700 dark:text-gray-300">
-          Semester
-        </label>
-        <select
-          value={semesterId}
-          onChange={(event) => setSemesterId(event.target.value)}
-          disabled={isLoadingOptions}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-        >
-          <option value="">Select a semester</option>
-          {semesters.map((semester) => (
-            <option key={semester.semester_id} value={String(semester.semester_id)}>
-              {semester.term} {semester.year}
-            </option>
-          ))}
+            if (!course || !semester) return null;
+
+            return (
+              <option
+                key={`${row.course_id}:${row.semester_id}`}
+                value={`${row.course_id}:${row.semester_id}`}
+              >
+                {course.course_number} - {course.title} ({semester.term} {semester.year})
+              </option>
+            );
+          })}
         </select>
+        {!isLoadingOptions && enrollments.length === 0 && (
+          <p className="mt-2 text-sm text-gray-500">
+            Add a class from the Course Catalogue before posting notes.
+          </p>
+        )}
       </div>
 
       <div className="mb-3">

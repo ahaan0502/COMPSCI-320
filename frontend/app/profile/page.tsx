@@ -99,7 +99,8 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
   ];
 
   return (
-    <div className="max-w-6xl mx-auto p-6 bg-white min-h-screen">
+    <main className="min-h-screen bg-white">
+      <div className="mx-auto max-w-6xl p-6">
       
       {/* Profile Header */}
       <div className="bg-white border border-gray-200 rounded-2xl p-8 mb-8 shadow-sm">
@@ -239,7 +240,8 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </main>
   );
 }
 

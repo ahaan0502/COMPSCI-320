@@ -1,6 +1,8 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { createBrowserClient } from '@supabase/ssr';
 import NoteCard, { type NotePost, type PostVisibility } from '../components/NoteCard';
@@ -140,11 +142,14 @@ function FiltersPlaceholder() {
 }
 
 function NotesPageContent() {
+  const searchParams = useSearchParams();
+  const selectedClassId = searchParams.get('classId');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FeedTab>('hot');
   const [posts, setPosts] = useState<NotePost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [emptyReason, setEmptyReason] = useState<string | null>(null);
 
   const sidebarFilters = SIDEBAR_FILTERS_FROM_COMPONENT;
 
@@ -174,9 +179,22 @@ function NotesPageContent() {
         return;
       }
 
-      const enrolledCourseIds = (enrolledData || []).map((row: { course_id: number }) => row.course_id);
+      let enrolledCourseIds = (enrolledData || []).map((row: { course_id: number }) => row.course_id);
+
+      if (selectedClassId) {
+        const classId = Number(selectedClassId);
+        enrolledCourseIds = enrolledCourseIds.filter((courseId) => courseId === classId);
+
+        if (enrolledCourseIds.length === 0) {
+          setEmptyReason('That class is not in My Classes.');
+          setPosts([]);
+          setLoading(false);
+          return;
+        }
+      }
 
       if (enrolledCourseIds.length === 0) {
+        setEmptyReason('Add a class before browsing notes.');
         setPosts([]);
         setLoading(false);
         return;
@@ -249,18 +267,19 @@ function NotesPageContent() {
           is_report: post.is_report ?? false,
           author_name: user?.name ?? 'Unknown',
           author_email: user?.email ?? '',
-          course_label: `${course?.department_id ?? ''} ${course?.course_number ?? ''} - ${course?.title ?? ''}`,
+          course_label: `${course?.course_number ?? ''} - ${course?.title ?? ''}`,
           semester_label: `${semester?.term ?? ''} ${semester?.year ?? ''}`,
           comments_count: 0,
         };
       });
 
       setPosts(mapped);
+      setEmptyReason(mapped.length === 0 ? 'No notes have been posted for these classes yet.' : null);
       setLoading(false);
     };
 
     fetchPosts();   
-  }, []);
+  }, [selectedClassId]);
 
   const filteredPosts = useMemo(
     () => sortPosts(applyFeedFilters(posts, searchQuery, sidebarFilters), activeTab),
@@ -327,7 +346,12 @@ function NotesPageContent() {
 
           {filteredPosts.length === 0 && (
             <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center text-zinc-500">
-              No posts match your search.
+              <p>{searchQuery ? 'No posts match your search.' : emptyReason ?? 'No notes found.'}</p>
+              {emptyReason && (
+                <Link href="/catalogue/departments" className="mt-4 inline-block font-bold text-[#7A1F1F] hover:underline">
+                  Browse Course Catalog
+                </Link>
+              )}
             </div>
           )}
         </main>

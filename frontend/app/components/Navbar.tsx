@@ -15,6 +15,7 @@ export default function Navbar() {
 	const [user, setUser] = useState<AuthUser | null>(null);
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const homeHref = user ? "/classes" : "/";
+	const displayName = user?.name?.trim() || "Profile";
 
 
 	useEffect(() => {
@@ -104,10 +105,13 @@ export default function Navbar() {
 
 								<Link
 									href="/profile"
-									aria-label="Profile"
-									className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 text-zinc-600 transition hover:bg-white hover:text-zinc-900"
+									aria-label={`Profile for ${displayName}`}
+									className="inline-flex h-10 items-center gap-2 rounded-full border border-zinc-300 px-3 text-zinc-600 transition hover:bg-white hover:text-zinc-900"
 								>
 									<User className="h-5 w-5" aria-hidden="true" />
+									<span className="hidden max-w-28 truncate text-sm font-medium sm:inline">
+										{displayName}
+									</span>
 								</Link>
 							</>
 						) : (
