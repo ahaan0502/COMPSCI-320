@@ -7,6 +7,10 @@ const redirectTo = (path: string) => {
   window.location.replace(path);
 };
 
+function isUmassEmail(email: string) {
+  return email.trim().toLowerCase().endsWith('@umass.edu');
+}
+
 export default function AuthCallback() {
   const [message, setMessage] = useState('Signing you in...');
 
@@ -24,21 +28,31 @@ export default function AuthCallback() {
         return;
       }
 
+      const email = user.email || '';
+
+      if (!isUmassEmail(email)) {
+        await supabase.auth.signOut();
+        redirectTo('/?error=not-umass');
+        return;
+      }
+
       const name =
         user.user_metadata?.full_name ||
         user.user_metadata?.name ||
-        user.email?.split('@')[0] ||
+        email.split('@')[0] ||
         'User';
 
       const { error } = await supabase.from('Users').upsert({
         author_id: user.id,
-        email: user.email,
+        email,
         name,
         created_at: new Date().toISOString(),
       }, { onConflict: 'author_id' });
 
       if (error) {
         console.error('Failed to upsert user profile:', error);
+        redirectTo('/?error=db-error');
+        return;
       }
 
       redirectTo('/classes');

@@ -56,7 +56,7 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
   const [activeTab, setActiveTab] = useState<TabType>('posts');
   
   // Content State (This only removes from the USER'S view/history)
-  const [userPosts, setUserPosts] = useState(initialPosts);
+  const [userPosts] = useState(initialPosts);
   const [likedPosts, setLikedPosts] = useState(initialLiked);
   const [userComments, setUserComments] = useState(initialComments);
 
@@ -99,7 +99,8 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
   ];
 
   return (
-    <div className="max-w-6xl mx-auto p-6 bg-white min-h-screen">
+    <main className="min-h-screen bg-white">
+      <div className="mx-auto max-w-6xl p-6">
       
       {/* Profile Header */}
       <div className="bg-white border border-gray-200 rounded-2xl p-8 mb-8 shadow-sm">
@@ -212,7 +213,7 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
                     Remove Comment
                   </button>
                 </div>
-                <p className="text-gray-700 font-medium py-1">"{comment.content}"</p>
+                <p className="text-gray-700 font-medium py-1">&quot;{comment.content}&quot;</p>
                 <p className="text-[10px] text-gray-400 mt-2 font-bold">{comment.date}</p>
               </div>
             ))
@@ -239,7 +240,8 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </main>
   );
 }
 

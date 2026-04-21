@@ -29,7 +29,8 @@ const UsersSmallIcon = () => (
 );
 
 interface ClassData {
-  id: number;
+  courseId: number;
+  semesterId: number;
   code: string;
   name: string;
   semester: string;
@@ -41,24 +42,29 @@ interface ClassesViewProps {
   onClassSelect: (classId: number) => void;
 }
 
+interface CourseRecord {
+  course_id: number;
+  department_id: number;
+  course_number: string;
+  title: string;
+}
+
+interface SemesterRecord {
+  semester_id: number;
+  term: string;
+  year: string;
+}
+
 interface EnrolledCourseRow {
   course_id: number;
-  Courses: {
-    id: number;
-    dept: string;
-    course_number: string;
-    title: string;
-  }[];
-  Semesters: {
-    id: number;
-    term: string;
-    year: string;
-  }[];
+  Courses: CourseRecord[] | CourseRecord | null;
+  Semesters: SemesterRecord[] | SemesterRecord | null;
 }
 
 const demoClasses: ClassData[] = [
   {
-    id: 320,
+    courseId: 320,
+    semesterId: 1,
     code: 'COMPSCI 320',
     name: 'Software Engineering',
     semester: 'Spring 2026',
@@ -66,7 +72,8 @@ const demoClasses: ClassData[] = [
     memberCount: 64,
   },
   {
-    id: 233,
+    courseId: 233,
+    semesterId: 1,
     code: 'MATH 233',
     name: 'Multivariate Calculus',
     semester: 'Spring 2026',
@@ -74,7 +81,8 @@ const demoClasses: ClassData[] = [
     memberCount: 52,
   },
   {
-    id: 515,
+    courseId: 515,
+    semesterId: 1,
     code: 'STAT 515',
     name: 'Statistics I',
     semester: 'Spring 2026',
@@ -85,6 +93,7 @@ const demoClasses: ClassData[] = [
 
 export function ClassesView({ onClassSelect }: ClassesViewProps) {
   const [enrolledClasses, setEnrolledClasses] = useState<ClassData[]>([]);
+  const [userName, setUserName] = useState('');
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
 
@@ -206,28 +215,90 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
     fetchClasses();
   }, []);
 
+  const router = useRouter();
+
+  const removeClass = async (courseId: number, semesterId: number) => {
+    if (!userId) return;
+
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    const { error } = await supabase
+      .from('Student_Enrolled_Courses')
+      .delete()
+      .eq('author_id', userId)
+      .eq('course_id', courseId)
+      .eq('semester_id', semesterId);
+
+    if (error) {
+      console.error('Remove class error:', error);
+      setError('Failed to remove class.');
+      return;
+    }
+
+    setEnrolledClasses((prev) =>
+      prev.filter((course) => !(course.courseId === courseId && course.semesterId === semesterId))
+    );
+  };
+
   if (loading) return (
-    <div className="flex items-center justify-center min-h-screen">
+    <div className="flex min-h-screen items-center justify-center bg-white">
       <p className="text-gray-500">Loading your classes...</p>
+    </div>
+  );
+
+  if (!userId) return (
+    <div className="flex min-h-screen items-center justify-center bg-white px-6">
+      <div className="max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+        <div className="mb-4 flex justify-center text-gray-300">
+          <BookIcon />
+        </div>
+        <h1 className="mb-2 text-2xl font-extrabold text-gray-900">Sign in to view your classes</h1>
+        <p className="mb-6 text-gray-600">Your class list is saved to your UMass notes account.</p>
+        <button
+          type="button"
+          onClick={() => router.push('/auth/google')}
+          className="rounded-lg bg-[#7A1F1F] px-5 py-3 font-bold text-white transition hover:bg-[#5a1616]"
+        >
+          Sign In
+        </button>
+      </div>
     </div>
   );
 
   return (
     <div className="w-full min-h-screen bg-white px-6 py-6">
-      <div className="mb-10">
-        <h1 className="text-3xl font-extrabold text-gray-900 mb-2 tracking-tight">
-          My Classes
-        </h1>
-        <p className="text-gray-600">
-          {userName ? `Welcome, ${userName}. ` : ''}Access shared notes and collaborative materials for your UMass courses.
-        </p>
+      <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-extrabold text-gray-900 mb-2 tracking-tight">
+            My Classes
+          </h1>
+          <p className="text-gray-600">
+            {userName ? `Welcome, ${userName}. ` : ''}Access shared notes and collaborative materials for your UMass courses.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push('/catalogue/departments')}
+          className="w-fit rounded-lg bg-[#7A1F1F] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#5a1616]"
+        >
+          Add Classes
+        </button>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {error}
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         {enrolledClasses.map((course) => (
           <div
-            key={course.id}
-            onClick={() => onClassSelect(course.id)}
+            key={`${course.courseId}-${course.semesterId}`}
+            onClick={() => onClassSelect(course.courseId)}
             className="group cursor-pointer bg-white border border-gray-200 rounded-xl p-6 transition-all hover:shadow-lg hover:border-[#7A1F1F]"
           >
             <div className="flex justify-between items-start mb-4">
@@ -257,6 +328,16 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
                 <UsersSmallIcon />
                 <span>{course.memberCount} students</span>
               </div>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  removeClass(course.courseId, course.semesterId);
+                }}
+                className="ml-auto text-sm font-bold text-gray-400 transition hover:text-[#7A1F1F]"
+              >
+                Remove
+              </button>
             </div>
           </div>
         ))}
@@ -270,7 +351,8 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
           <p className="text-gray-500 font-medium">
             No classes found. Time to join some study groups!
           </p>
-          <button className="mt-4 text-[#7A1F1F] font-bold hover:underline">
+          <button onClick={() => router.push('/catalogue/departments')}
+          className="mt-4 text-[#7A1F1F] font-bold hover:underline">
             Browse Course Catalog
           </button>
         </div>
