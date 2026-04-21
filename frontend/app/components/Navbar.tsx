@@ -121,32 +121,24 @@ export default function Navbar() {
 							>
 								Sign In
 							</Link>
-						)}
-					</div>
-				</nav>
-			</header>
 
-			{isModalOpen && (
-				<div
-					className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-					onClick={(event) => {
-						if (event.target === event.currentTarget) setIsModalOpen(false);
-					}}
-				>
-					<div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white dark:bg-gray-900">
-						<div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
-							<h2 className="text-xl font-semibold text-black dark:text-white">Create New Post</h2>
-							<button
-								type="button"
-								onClick={() => setIsModalOpen(false)}
-								className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-								aria-label="Close create post form"
+							<Link
+								href="/profile"
+								aria-label="Profile"
+								className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 text-zinc-600 transition hover:bg-white hover:text-zinc-900"
 							>
-								<X size={24} />
-							</button>
-						</div>
-						<CreatePost onSuccess={() => setIsModalOpen(false)} />
-					</div>
+								<User className="h-5 w-5" aria-hidden="true" />
+							</Link>
+						</>
+					) : (
+						<Link
+							href="/auth/google"
+							className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-base font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:text-zinc-900"
+						>
+							<User className="h-4.5 w-4.5" aria-hidden="true" />
+							<span>Sign in</span>
+						</Link>
+					)}
 				</div>
 			)}
 		</>

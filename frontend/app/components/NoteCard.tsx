@@ -1,10 +1,12 @@
 import {
   ArrowDown,
   ArrowUp,
+  Flag,
   MessageSquare,
   Pencil,
   Share2,
 } from "lucide-react";
+import Link from "next/link";
 
 export type PostVisibility = "public" | "private";
 
@@ -56,6 +58,14 @@ function formatRelativeTime(timestamp: string): string {
 }
 
 export default function NoteCard({ post }: NoteCardProps) {
+  const reportQuery = new URLSearchParams({
+    postId: String(post.id),
+    postTitle: post.title,
+    courseName: post.course_label,
+    semesterName: post.semester_label,
+    authorName: post.author_name || post.author_email,
+  }).toString();
+
   const visibilityClasses =
     post.visibility === "private"
       ? "bg-violet-100 text-violet-700"
@@ -125,6 +135,13 @@ export default function NoteCard({ post }: NoteCardProps) {
               <Pencil className="h-4 w-4" />
               <span>Suggest Edit</span>
             </button>
+            <Link
+              href={`/report-post?${reportQuery}`}
+              className="inline-flex items-center gap-1.5 font-medium text-red-700 transition hover:text-red-900"
+            >
+              <Flag className="h-4 w-4" />
+              <span>Report</span>
+            </Link>
           </div>
         </div>
       </div>
