@@ -43,14 +43,14 @@ interface ClassesViewProps {
 }
 
 interface CourseRecord {
-  course_id: number;
-  department_id: number;
+  id: number;
+  dept: string;
   course_number: string;
   title: string;
 }
 
 interface SemesterRecord {
-  semester_id: number;
+  id: number;
   term: string;
   year: string;
 }
@@ -59,6 +59,10 @@ interface EnrolledCourseRow {
   course_id: number;
   Courses: CourseRecord[] | CourseRecord | null;
   Semesters: SemesterRecord[] | SemesterRecord | null;
+}
+
+function firstRelation<T>(value: T[] | T | null): T | null {
+  return Array.isArray(value) ? value[0] ?? null : value;
 }
 
 const demoClasses: ClassData[] = [
@@ -106,6 +110,8 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
       if (!supabaseUrl || !supabaseAnonKey) {
         setEnrolledClasses(demoClasses);
         setUserName('');
+        setUserId('demo-user');
+        setError(null);
         setLoading(false);
         return;
       }
@@ -133,36 +139,55 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         session.user.email?.split('@')[0] ||
         '';
 
-      const { data: profile } = await supabase
-        .from('Users')
-        .select('name')
-        .eq('author_id', session.user.id)
-        .maybeSingle();
+        setUserId(session.user.id);
+
+        setUserName(
+          session.user.user_metadata?.name ||
+          session.user.user_metadata?.full_name ||
+          ''
+        );
 
       setUserName(profile?.name || fallbackName);
 
-      // Fetch enrolled courses with course and semester info
-      const { data, error } = await supabase
-        .from('Student_Enrolled_Courses')
-        .select(`
-          course_id,
-          Courses (
-            course_id,
-            department_id,
-            course_number,
-            title
-          ),
-          Semesters (
-            semester_id,
-            term,
-            year
-          )
-        `)
-        .eq('author_id', session.user.id);
+        // Get note and member counts per course
+        console.log('Data before mapping:', data);
 
-      if (error) {
-        console.error('Fetch error:', error);
-        setError('Failed to load your classes.');
+        const classes = await Promise.all((data || []).map(async (row: EnrolledCourseRow) => {
+          const course = firstRelation(row.Courses);
+          const semester = firstRelation(row.Semesters);
+
+          if (!course || !semester) {
+            return null;
+          }
+
+          console.log('Processing row:', row);
+          console.log('Course:', course);
+          console.log('Semester:', semester);
+
+          // Count notes for this course
+          const { count: noteCount } = await supabase
+            .from('Posts')
+            .select('*', { count: 'exact', head: true })
+            .eq('course_id', course.id);
+
+          // Count enrolled students for this course
+          const { count: memberCount } = await supabase
+            .from('Student_Enrolled_Courses')
+            .select('*', { count: 'exact', head: true })
+            .eq('course_id', course.id);
+
+          return {
+            courseId: course.id,
+            semesterId: semester.id,
+            code: `${course.dept} ${course.course_number}`,
+            name: course.title,
+            semester: `${semester.term} ${semester.year}`,
+            noteCount: noteCount || 0,
+            memberCount: memberCount || 0,
+          };
+        }));
+
+        setEnrolledClasses(classes.filter((course): course is ClassData => course !== null));
         setLoading(false);
         return;
       }
@@ -213,6 +238,13 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
 
   const removeClass = async (courseId: number, semesterId: number) => {
     if (!userId) return;
+
+    if (userId === 'demo-user') {
+      setEnrolledClasses((prev) =>
+        prev.filter((course) => !(course.courseId === courseId && course.semesterId === semesterId))
+      );
+      return;
+    }
 
     const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
