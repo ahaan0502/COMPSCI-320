@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
-import { BookOpen, Bookmark, Plus, User, X } from "lucide-react";
-import { CreatePost } from "./CreatePost";
+import { BookOpen, Bookmark, Plus, Shield, User } from "lucide-react";
 
 type AuthUser = {
 	name: string;
@@ -13,7 +12,6 @@ type AuthUser = {
 
 export default function Navbar() {
 	const [user, setUser] = useState<AuthUser | null>(null);
-	const [isModalOpen, setIsModalOpen] = useState(false);
 	const homeHref = user ? "/classes" : "/";
 	const displayName = user?.name?.trim() || "Profile";
 
@@ -89,19 +87,35 @@ export default function Navbar() {
 							<Bookmark className="h-4.5 w-4.5" aria-hidden="true" />
 							<span>Saved Notes</span>
 						</Link>
+						{user && (
+							<Link
+								href="/admin"
+								className="inline-flex items-center gap-2 text-[18px] font-medium text-zinc-600 transition hover:text-zinc-900"
+							>
+								<Shield className="h-4.5 w-4.5" aria-hidden="true" />
+								<span>Admin</span>
+							</Link>
+						)}
 					</div>
 
 					<div className="flex items-center gap-3">
 						{user ? (
 							<>
-								<button
-									type="button"
-									onClick={() => setIsModalOpen(true)}
+								<Link
+									href="/admin"
+									className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-white hover:text-zinc-900 md:hidden"
+								>
+									<Shield className="h-4 w-4" aria-hidden="true" />
+									<span>Admin</span>
+								</Link>
+
+								<Link
+									href="/notes"
 									className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-base font-semibold text-white transition hover:bg-red-900"
 								>
 									<Plus className="h-4.5 w-4.5" aria-hidden="true" />
 									<span className="hidden sm:inline">Post Notes</span>
-								</button>
+								</Link>
 
 								<Link
 									href="/profile"
@@ -121,26 +135,10 @@ export default function Navbar() {
 							>
 								Sign In
 							</Link>
-
-							<Link
-								href="/profile"
-								aria-label="Profile"
-								className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300 text-zinc-600 transition hover:bg-white hover:text-zinc-900"
-							>
-								<User className="h-5 w-5" aria-hidden="true" />
-							</Link>
-						</>
-					) : (
-						<Link
-							href="/auth/google"
-							className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-base font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:text-zinc-900"
-						>
-							<User className="h-4.5 w-4.5" aria-hidden="true" />
-							<span>Sign in</span>
-						</Link>
-					)}
-				</div>
-			)}
+						)}
+					</div>
+				</nav>
+			</header>
 		</>
 	);
 }

@@ -43,14 +43,14 @@ interface ClassesViewProps {
 }
 
 interface CourseRecord {
-  course_id: number;
-  department_id: number;
+  id: number;
+  dept: string;
   course_number: string;
   title: string;
 }
 
 interface SemesterRecord {
-  semester_id: number;
+  id: number;
   term: string;
   year: string;
 }
@@ -59,6 +59,10 @@ interface EnrolledCourseRow {
   course_id: number;
   Courses: CourseRecord[] | CourseRecord | null;
   Semesters: SemesterRecord[] | SemesterRecord | null;
+}
+
+function firstRelation<T>(value: T[] | T | null): T | null {
+  return Array.isArray(value) ? value[0] ?? null : value;
 }
 
 const demoClasses: ClassData[] = [
@@ -95,13 +99,16 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
   const [enrolledClasses, setEnrolledClasses] = useState<ClassData[]>([]);
   const [userName, setUserName] = useState('');
   const [loading, setLoading] = useState(true);
-  const [userName, setUserName] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchClasses = async () => {
       const applyDemoClasses = () => {
         setEnrolledClasses(demoClasses);
         setUserName('');
+        setUserId('demo-user');
+        setError(null);
         setLoading(false);
       };
 
@@ -131,6 +138,8 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
           applyDemoClasses();
           return;
         }
+
+        setUserId(session.user.id);
 
         setUserName(
           session.user.user_metadata?.name ||
@@ -171,8 +180,8 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         console.log('Data before mapping:', data);
 
         const classes = await Promise.all((data || []).map(async (row: EnrolledCourseRow) => {
-          const course = row.Courses?.[0];
-          const semester = row.Semesters?.[0];
+          const course = firstRelation(row.Courses);
+          const semester = firstRelation(row.Semesters);
 
           if (!course || !semester) {
             return null;
@@ -195,7 +204,8 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
             .eq('course_id', course.id);
 
           return {
-            id: course.id,
+            courseId: course.id,
+            semesterId: semester.id,
             code: `${course.dept} ${course.course_number}`,
             name: course.title,
             semester: `${semester.term} ${semester.year}`,
@@ -219,6 +229,13 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
 
   const removeClass = async (courseId: number, semesterId: number) => {
     if (!userId) return;
+
+    if (userId === 'demo-user') {
+      setEnrolledClasses((prev) =>
+        prev.filter((course) => !(course.courseId === courseId && course.semesterId === semesterId))
+      );
+      return;
+    }
 
     const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
