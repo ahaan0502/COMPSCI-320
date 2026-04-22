@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import NoteCard, { NotePost } from '../components/NoteCard';
 
 // --- Simplified SVG Icons ---
 const UserIcon = () => (
@@ -27,14 +28,6 @@ const CameraIcon = () => (
 // --- Types ---
 type TabType = 'posts' | 'liked' | 'comments';
 
-interface Post {
-  id: string;
-  title: string;
-  upvotes: number;
-  date: string;
-  author?: string;
-}
-
 interface Comment {
   id: string;
   postTitle: string;
@@ -44,30 +37,26 @@ interface Comment {
 
 interface ProfileViewProps {
   userEmail: string;
-  initialPosts: Post[];
-  initialLiked: Post[];
+  initialPosts: NotePost[];
+  initialLiked: NotePost[];
   initialComments: Comment[];
 }
 
 export function ProfileView({ userEmail, initialPosts, initialLiked, initialComments }: ProfileViewProps) {
-  // State Management
   const [username, setUsername] = useState("NewUser");
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('posts');
   
-  // Content State (This only removes from the USER'S view/history)
   const [userPosts] = useState(initialPosts);
   const [likedPosts, setLikedPosts] = useState(initialLiked);
   const [userComments, setUserComments] = useState(initialComments);
 
-  // Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [tempUsername, setTempUsername] = useState(username);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const realName = userEmail.split("@")[0];
 
-  // --- Handlers ---
   const handleSaveUsername = () => {
     setUsername(tempUsername);
     setIsEditModalOpen(false);
@@ -82,16 +71,6 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
     }
   };
 
-  const handleRemoveLike = (id: string) => {
-    // Logic: This removes the reference from the user's "Liked" list, not the actual post.
-    setLikedPosts(prev => prev.filter(p => p.id !== id));
-  };
-
-  const handleRemoveComment = (id: string) => {
-    // Logic: This removes the comment activity from the user's profile.
-    setUserComments(prev => prev.filter(c => c.id !== id));
-  };
-
   const tabs = [
     { id: 'posts', label: 'My Posts', count: userPosts.length },
     { id: 'liked', label: 'Liked', count: likedPosts.length },
@@ -102,11 +81,8 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-6xl p-6">
       
-      {/* Profile Header */}
       <div className="bg-white border border-gray-200 rounded-2xl p-8 mb-8 shadow-sm">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
-          
-          {/* Profile Picture */}
           <div className="relative group">
             <div className="w-32 h-32 rounded-full overflow-hidden bg-[#f5e8e8] text-[#7A1F1F] flex items-center justify-center border-4 border-white shadow-md">
               {profilePic ? (
@@ -121,13 +97,7 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
             >
               <CameraIcon />
             </button>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
-              accept="image/*" 
-              onChange={handleImageUpload} 
-            />
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
           </div>
           
           <div className="flex-1 text-center md:text-left">
@@ -146,7 +116,6 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-8 overflow-x-auto">
         {tabs.map((tab) => (
           <button
@@ -168,35 +137,16 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
         ))}
       </div>
 
-      {/* Tab Content */}
       <div className="space-y-4">
         {activeTab === 'posts' && (
           userPosts.length > 0 ? (
-            userPosts.map(post => (
-              <div key={post.id} className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#7A1F1F] transition-all group">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-[#7A1F1F] mb-1 block">{post.date}</span>
-                <h3 className="text-lg font-bold text-gray-900">{post.title}</h3>
-              </div>
-            ))
+            userPosts.map(post => <NoteCard key={post.id} post={post} />)
           ) : <EmptyState message="No posts shared." />
         )}
 
         {activeTab === 'liked' && (
           likedPosts.length > 0 ? (
-            likedPosts.map(post => (
-              <div key={post.id} className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#7A1F1F] transition-all flex justify-between items-center">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">{post.title}</h3>
-                  <p className="text-sm text-gray-500 italic">by {post.author}</p>
-                </div>
-                <button 
-                  onClick={() => handleRemoveLike(post.id)}
-                  className="text-[11px] font-bold uppercase tracking-wider text-[#7A1F1F] hover:bg-[#f5e8e8] px-4 py-2 rounded-lg transition-colors border border-transparent hover:border-[#7A1F1F]/20"
-                >
-                  Remove Like
-                </button>
-              </div>
-            ))
+            likedPosts.map(post => <NoteCard key={post.id} post={post} />)
           ) : <EmptyState message="No liked content." />
         )}
 
@@ -206,12 +156,6 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
               <div key={comment.id} className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#7A1F1F] transition-all">
                 <div className="flex justify-between items-start mb-2">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-[#7A1F1F]">On: {comment.postTitle}</span>
-                  <button 
-                    onClick={() => handleRemoveComment(comment.id)}
-                    className="text-[11px] font-bold uppercase tracking-wider text-gray-400 hover:text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all"
-                  >
-                    Remove Comment
-                  </button>
                 </div>
                 <p className="text-gray-700 font-medium py-1">&quot;{comment.content}&quot;</p>
                 <p className="text-[10px] text-gray-400 mt-2 font-bold">{comment.date}</p>
@@ -221,7 +165,6 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
         )}
       </div>
 
-      {/* Username Modal */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
@@ -252,16 +195,35 @@ const EmptyState = ({ message }: { message: string }) => (
 );
 
 export default function Page() {
-  const posts: Post[] = [{ id: "1", title: "CS 240 - Probability Summary", upvotes: 32, date: "April 1, 2026" }];
-  const liked: Post[] = [{ id: "2", title: "CS 311 - Master Theorem Notes", upvotes: 89, date: "Mar 15, 2026", author: "jdoe23" }];
-  const comments: Comment[] = [{ id: "c1", postTitle: "Math 235 Guide", content: "This saved me for the midterm, thanks!", date: "2 days ago" }];
+  const posts: NotePost[] = [{
+    id: 1,
+    created_at: new Date().toISOString(),
+    author_id: "1",
+    title: "CS 240 - Probability Summary",
+    body: "Summary of key concepts.",
+    purpose: "Study",
+    visibility: "public",
+    group_id: null,
+    tags: [],
+    votes: 32,
+    updated_at: new Date().toISOString(),
+    is_deleted: false,
+    course_id: 1,
+    semester_id: 1,
+    is_report: false,
+    author_name: "You",
+    author_email: "you@umass.edu",
+    course_label: "CS 240",
+    semester_label: "Spring 2026",
+    comments_count: 0
+  }];
 
   return (
     <ProfileView 
       userEmail="you@umass.edu" 
       initialPosts={posts} 
-      initialLiked={liked} 
-      initialComments={comments} 
+      initialLiked={[]} 
+      initialComments={[]} 
     />
   );
 }
