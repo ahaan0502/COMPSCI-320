@@ -3,7 +3,6 @@
 import React, { useState, useRef } from 'react';
 import NoteCard, { NotePost } from '../components/NoteCard';
 
-// --- Simplified SVG Icons ---
 const UserIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-16 h-16">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -25,8 +24,7 @@ const CameraIcon = () => (
   </svg>
 );
 
-// --- Types ---
-type TabType = 'posts' | 'liked' | 'comments';
+type TabType = 'posts' | 'saved' | 'liked' | 'comments';
 
 interface Comment {
   id: string;
@@ -38,18 +36,26 @@ interface Comment {
 interface ProfileViewProps {
   userEmail: string;
   initialPosts: NotePost[];
+  initialSaved: NotePost[];
   initialLiked: NotePost[];
   initialComments: Comment[];
 }
 
-export function ProfileView({ userEmail, initialPosts, initialLiked, initialComments }: ProfileViewProps) {
+export function ProfileView({ 
+  userEmail, 
+  initialPosts, 
+  initialSaved,
+  initialLiked, 
+  initialComments 
+}: ProfileViewProps) {
   const [username, setUsername] = useState("NewUser");
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('posts');
   
   const [userPosts] = useState(initialPosts);
-  const [likedPosts, setLikedPosts] = useState(initialLiked);
-  const [userComments, setUserComments] = useState(initialComments);
+  const [savedPosts] = useState(initialSaved);
+  const [likedPosts] = useState(initialLiked);
+  const [userComments] = useState(initialComments);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [tempUsername, setTempUsername] = useState(username);
@@ -73,6 +79,7 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
 
   const tabs = [
     { id: 'posts', label: 'My Posts', count: userPosts.length },
+    { id: 'saved', label: 'Saved', count: savedPosts.length },
     { id: 'liked', label: 'Liked', count: likedPosts.length },
     { id: 'comments', label: 'Comments', count: userComments.length },
   ];
@@ -142,6 +149,12 @@ export function ProfileView({ userEmail, initialPosts, initialLiked, initialComm
           userPosts.length > 0 ? (
             userPosts.map(post => <NoteCard key={post.id} post={post} />)
           ) : <EmptyState message="No posts shared." />
+        )}
+
+        {activeTab === 'saved' && (
+          savedPosts.length > 0 ? (
+            savedPosts.map(post => <NoteCard key={post.id} post={post} />)
+          ) : <EmptyState message="No saved notes." />
         )}
 
         {activeTab === 'liked' && (
@@ -222,6 +235,7 @@ export default function Page() {
     <ProfileView 
       userEmail="you@umass.edu" 
       initialPosts={posts} 
+      initialSaved={[]} 
       initialLiked={[]} 
       initialComments={[]} 
     />
