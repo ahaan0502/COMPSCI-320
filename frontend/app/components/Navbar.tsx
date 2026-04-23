@@ -81,7 +81,7 @@ export default function Navbar() {
 							<span>My Classes</span>
 						</Link>
 						<Link
-							href="/notes"
+							href="/savednotes"
 							className="inline-flex items-center gap-2 text-[18px] font-medium text-zinc-600 transition hover:text-zinc-900"
 						>
 							<Bookmark className="h-4.5 w-4.5" aria-hidden="true" />
