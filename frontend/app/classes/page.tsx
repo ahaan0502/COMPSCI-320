@@ -43,26 +43,23 @@ interface ClassesViewProps {
 }
 
 interface CourseRecord {
-  id: number;
-  dept: string;
+  course_id: number;
+  department_id: number;
   course_number: string;
   title: string;
 }
 
 interface SemesterRecord {
-  id: number;
+  semester_id: number;
   term: string;
   year: string;
 }
 
 interface EnrolledCourseRow {
   course_id: number;
+  semester_id: number;
   Courses: CourseRecord[] | CourseRecord | null;
   Semesters: SemesterRecord[] | SemesterRecord | null;
-}
-
-function firstRelation<T>(value: T[] | T | null): T | null {
-  return Array.isArray(value) ? value[0] ?? null : value;
 }
 
 const demoClasses: ClassData[] = [
@@ -139,55 +136,36 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         session.user.email?.split('@')[0] ||
         '';
 
-        setUserId(session.user.id);
-
-        setUserName(
-          session.user.user_metadata?.name ||
-          session.user.user_metadata?.full_name ||
-          ''
-        );
+      const { data: profile } = await supabase
+        .from('Users')
+        .select('name')
+        .eq('author_id', session.user.id)
+        .maybeSingle();
 
       setUserName(profile?.name || fallbackName);
 
-        // Get note and member counts per course
-        console.log('Data before mapping:', data);
+      const { data, error } = await supabase
+        .from('Student_Enrolled_Courses')
+        .select(`
+          course_id,
+          semester_id,
+          Courses (
+            course_id,
+            department_id,
+            course_number,
+            title
+          ),
+          Semesters (
+            semester_id,
+            term,
+            year
+          )
+        `)
+        .eq('author_id', session.user.id);
 
-        const classes = await Promise.all((data || []).map(async (row: EnrolledCourseRow) => {
-          const course = firstRelation(row.Courses);
-          const semester = firstRelation(row.Semesters);
-
-          if (!course || !semester) {
-            return null;
-          }
-
-          console.log('Processing row:', row);
-          console.log('Course:', course);
-          console.log('Semester:', semester);
-
-          // Count notes for this course
-          const { count: noteCount } = await supabase
-            .from('Posts')
-            .select('*', { count: 'exact', head: true })
-            .eq('course_id', course.id);
-
-          // Count enrolled students for this course
-          const { count: memberCount } = await supabase
-            .from('Student_Enrolled_Courses')
-            .select('*', { count: 'exact', head: true })
-            .eq('course_id', course.id);
-
-          return {
-            courseId: course.id,
-            semesterId: semester.id,
-            code: `${course.dept} ${course.course_number}`,
-            name: course.title,
-            semester: `${semester.term} ${semester.year}`,
-            noteCount: noteCount || 0,
-            memberCount: memberCount || 0,
-          };
-        }));
-
-        setEnrolledClasses(classes.filter((course): course is ClassData => course !== null));
+      if (error) {
+        console.error('Fetch error:', error);
+        setError('Failed to load your classes.');
         setLoading(false);
         return;
       }
