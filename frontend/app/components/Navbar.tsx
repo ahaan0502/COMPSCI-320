@@ -93,7 +93,7 @@ export default function Navbar() {
 							<span>My Classes</span>
 						</Link>
 						<Link
-							href="/notes"
+							href="/savednotes"
 							className={navLinkClass(isSavedNotesActive)}
 							aria-current={isSavedNotesActive ? "page" : undefined}
 						>
