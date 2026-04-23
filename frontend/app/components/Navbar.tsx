@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { BookOpen, Bookmark, Plus, Shield, User } from "lucide-react";
 
@@ -12,8 +13,18 @@ type AuthUser = {
 
 export default function Navbar() {
 	const [user, setUser] = useState<AuthUser | null>(null);
+	const pathname = usePathname();
 	const homeHref = user ? "/classes" : "/";
 	const displayName = user?.name?.trim() || "Profile";
+	const navLinkClass = (isActive: boolean) =>
+		`relative inline-flex items-center gap-2 py-5 text-[18px] font-medium transition after:absolute after:bottom-3 after:left-0 after:h-0.5 after:w-full after:rounded-full after:bg-red-800 after:transition ${
+			isActive
+				? "text-zinc-950 after:opacity-100"
+				: "text-zinc-600 after:opacity-0 hover:text-zinc-900 hover:after:opacity-100"
+		}`;
+	const isClassesActive = pathname === "/classes";
+	const isSavedNotesActive = pathname === "/savednotes";
+	const isAdminActive = pathname === "/admin" || pathname.startsWith("/admin/");
 
 
 	useEffect(() => {
@@ -75,14 +86,16 @@ export default function Navbar() {
 					<div className="hidden items-center gap-7 md:flex">
 						<Link
 							href="/classes"
-							className="inline-flex items-center gap-2 text-[18px] font-medium text-zinc-600 transition hover:text-zinc-900"
+							className={navLinkClass(isClassesActive)}
+							aria-current={isClassesActive ? "page" : undefined}
 						>
 							<BookOpen className="h-4.5 w-4.5" aria-hidden="true" />
 							<span>My Classes</span>
 						</Link>
 						<Link
 							href="/notes"
-							className="inline-flex items-center gap-2 text-[18px] font-medium text-zinc-600 transition hover:text-zinc-900"
+							className={navLinkClass(isSavedNotesActive)}
+							aria-current={isSavedNotesActive ? "page" : undefined}
 						>
 							<Bookmark className="h-4.5 w-4.5" aria-hidden="true" />
 							<span>Saved Notes</span>
@@ -90,7 +103,8 @@ export default function Navbar() {
 						{user && (
 							<Link
 								href="/admin"
-								className="inline-flex items-center gap-2 text-[18px] font-medium text-zinc-600 transition hover:text-zinc-900"
+								className={navLinkClass(isAdminActive)}
+								aria-current={isAdminActive ? "page" : undefined}
 							>
 								<Shield className="h-4.5 w-4.5" aria-hidden="true" />
 								<span>Admin</span>
@@ -103,7 +117,12 @@ export default function Navbar() {
 							<>
 								<Link
 									href="/admin"
-									className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-white hover:text-zinc-900 md:hidden"
+									className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition md:hidden ${
+										isAdminActive
+											? "border-red-200 bg-white text-red-800 shadow-sm"
+											: "border-zinc-300 text-zinc-700 hover:bg-white hover:text-zinc-900"
+									}`}
+									aria-current={isAdminActive ? "page" : undefined}
 								>
 									<Shield className="h-4 w-4" aria-hidden="true" />
 									<span>Admin</span>
