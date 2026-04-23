@@ -70,6 +70,7 @@ export default function NoteCard({ post }: NoteCardProps) {
     post.visibility === "private"
       ? "bg-violet-100 text-violet-700"
       : "bg-emerald-100 text-emerald-700";
+  const authorLabel = post.author_name || post.author_email || "Unknown";
 
   return (
     <article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5">
@@ -104,7 +105,14 @@ export default function NoteCard({ post }: NoteCardProps) {
               {post.visibility === "private" ? "Private" : "Public"}
             </span>
             <span>
-              Posted by {post.author_email} · {formatRelativeTime(post.created_at)}
+              Posted by{" "}
+              <Link
+                href={`/profile/${post.author_id}`}
+                className="font-medium text-zinc-700 underline-offset-4 transition hover:text-zinc-900 hover:underline"
+              >
+                {authorLabel}
+              </Link>{" "}
+              · {formatRelativeTime(post.created_at)}
             </span>
           </div>
 
