@@ -1,25 +1,53 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ModerationPostCard from '../components/ModerationPostCard';
+import type { AdminClassSummary, AdminPost } from '../lib/moderation';
 import {
-  INITIAL_BANNED_USERS_BY_CLASS,
-  MOCK_CURRENT_USER_ID,
-  getAdminClasses,
-  getPostsForAdmin,
-} from '../lib/adminMockData';
+  banUserFromCourse,
+  deleteModerationPost,
+  fetchModerationData,
+  resolveModerationReports,
+  saveModerationPost,
+  unbanUserFromCourse,
+} from '../lib/moderation';
 
 export default function AdminPage() {
-  const [posts, setPosts] = useState(() => getPostsForAdmin(MOCK_CURRENT_USER_ID));
-  const [bannedUsersByClass, setBannedUsersByClass] = useState<Record<number, string[]>>(INITIAL_BANNED_USERS_BY_CLASS);
+  const [posts, setPosts] = useState<AdminPost[]>([]);
+  const [adminClasses, setAdminClasses] = useState<AdminClassSummary[]>([]);
+  const [bannedUsersByCourse, setBannedUsersByCourse] = useState<Record<number, string[]>>({});
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const adminClasses = useMemo(() => getAdminClasses(MOCK_CURRENT_USER_ID), []);
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const moderationData = await fetchModerationData();
+      setCurrentUserId(moderationData.currentUserId);
+      setIsAdmin(moderationData.isAdmin);
+      setPosts(moderationData.posts);
+      setAdminClasses(moderationData.adminClasses);
+      setBannedUsersByCourse(moderationData.bannedUsersByCourse);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load moderation dashboard.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
 
   const reportedPosts = useMemo(
     () =>
       posts
-        .filter((post) => post.is_report)
+        .filter((post) => post.reportCount > 0)
         .sort((a, b) => {
           if (b.reportCount !== a.reportCount) return b.reportCount - a.reportCount;
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -27,54 +55,42 @@ export default function AdminPage() {
     [posts],
   );
 
-  const classModerationStats = useMemo(
-    () =>
-      adminClasses.map((courseClass) => {
-        const classPosts = posts.filter((post) => post.course_id === courseClass.id);
-        const classReported = classPosts.filter((post) => post.is_report).length;
-        return {
-          ...courseClass,
-          postCount: classPosts.length,
-          reportedCount: classReported,
-        };
-      }),
-    [adminClasses, posts],
-  );
-
-  const updatePost = (postId: number, updates: { title: string; body: string }) => {
-    setPosts((prev) => prev.map((post) => (post.id === postId ? { ...post, ...updates } : post)));
+  const refreshAfterAction = async (action: () => Promise<void> | void) => {
+    try {
+      setError(null);
+      await action();
+      await loadDashboard();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Moderation action failed.');
+    }
   };
 
-  const deletePost = (postId: number) => {
-    setPosts((prev) => prev.filter((post) => post.id !== postId));
-  };
+  if (loading) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-zinc-100 px-6">
+        <p className="text-zinc-500">Loading moderation dashboard...</p>
+      </div>
+    );
+  }
 
-  const banUser = (classId: number, userId: string) => {
-    setBannedUsersByClass((prev) => {
-      const existing = prev[classId] ?? [];
-      if (existing.includes(userId)) return prev;
-      return {
-        ...prev,
-        [classId]: [...existing, userId],
-      };
-    });
-  };
+  if (error) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-zinc-100 px-6">
+        <div className="max-w-xl rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
+          <h1 className="mb-2 text-3xl font-bold tracking-tight text-zinc-800">Admin Dashboard Unavailable</h1>
+          <p className="text-zinc-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
-  const unbanUser = (classId: number, userId: string) => {
-    setBannedUsersByClass((prev) => ({
-      ...prev,
-      [classId]: (prev[classId] ?? []).filter((currentUserId) => currentUserId !== userId),
-    }));
-  };
-
-  if (adminClasses.length === 0) {
+  if (!isAdmin) {
     return (
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-zinc-100 px-6">
         <div className="max-w-xl rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
-          <h1 className="mb-2 text-3xl font-bold tracking-tight text-zinc-800">No Admin Classes Assigned</h1>
+          <h1 className="mb-2 text-3xl font-bold tracking-tight text-zinc-800">Admin Access Required</h1>
           <p className="text-zinc-600">
-            Your account currently has no class moderation scope. Once class admin mappings are configured,
-            your dashboard will appear here.
+            Your account is signed in, but `Users.is_admin` is not enabled for this user.
           </p>
         </div>
       </div>
@@ -87,7 +103,7 @@ export default function AdminPage() {
         <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
           <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Admin</p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-800">Moderation Dashboard</h1>
-          <p className="mt-2 text-zinc-600">Hardcoded for now.</p>
+          <p className="mt-2 text-zinc-600">Live data from Supabase reports, posts, comments, and course bans.</p>
         </section>
 
         <section className="space-y-4">
@@ -104,44 +120,61 @@ export default function AdminPage() {
                 <ModerationPostCard
                   key={post.id}
                   post={post}
-                  isAuthorBanned={post.course_id !== null && (bannedUsersByClass[post.course_id] ?? []).includes(post.author_id)}
-                  onSaveEdit={updatePost}
-                  onDelete={deletePost}
-                  onBanUser={banUser}
-                  onUnbanUser={unbanUser}
+                  isAuthorBanned={post.course_id !== null && (bannedUsersByCourse[post.course_id] ?? []).includes(post.author_id)}
+                  onSaveEdit={(postId, updates) => refreshAfterAction(() => saveModerationPost(postId, updates))}
+                  onDelete={(postId) => refreshAfterAction(() => deleteModerationPost(postId))}
+                  onResolveReports={(postId) =>
+                    refreshAfterAction(async () => {
+                      if (!currentUserId) throw new Error('Missing current admin user.');
+                      await resolveModerationReports(postId, currentUserId);
+                    })
+                  }
+                  onBanUser={(courseId, userId) =>
+                    refreshAfterAction(async () => {
+                      if (!currentUserId) throw new Error('Missing current admin user.');
+                      await banUserFromCourse(courseId, userId, currentUserId);
+                    })
+                  }
+                  onUnbanUser={(courseId, userId) => refreshAfterAction(() => unbanUserFromCourse(courseId, userId))}
                 />
               ))}
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center text-zinc-500">
-              No reported posts in your admin classes.
+              No open reports right now.
             </div>
           )}
         </section>
 
         <section className="space-y-4">
           <h2 className="text-2xl font-bold tracking-tight text-zinc-800">Your Admin Classes</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {classModerationStats.map((courseClass) => (
-              <Link
-                key={courseClass.id}
-                href={`/admin/classes/${courseClass.id}`}
-                className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <p className="text-sm font-semibold text-zinc-500">{courseClass.code}</p>
-                <h3 className="mt-1 text-xl font-bold text-zinc-800">{courseClass.title}</h3>
-                <p className="mt-1 text-sm text-zinc-500">{courseClass.semesterLabel}</p>
-                <div className="mt-4 flex items-center gap-2 text-sm">
-                  <span className="rounded-full bg-zinc-100 px-3 py-1 font-semibold text-zinc-700">
-                    {courseClass.postCount} posts
-                  </span>
-                  <span className="rounded-full bg-red-100 px-3 py-1 font-semibold text-red-700">
-                    {courseClass.reportedCount} reported
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
+          {adminClasses.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {adminClasses.map((courseClass) => (
+                <Link
+                  key={courseClass.id}
+                  href={`/admin/classes/${courseClass.courseId}?semester=${courseClass.semesterId}`}
+                  className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <p className="text-sm font-semibold text-zinc-500">{courseClass.code}</p>
+                  <h3 className="mt-1 text-xl font-bold text-zinc-800">{courseClass.title}</h3>
+                  <p className="mt-1 text-sm text-zinc-500">{courseClass.semesterLabel}</p>
+                  <div className="mt-4 flex items-center gap-2 text-sm">
+                    <span className="rounded-full bg-zinc-100 px-3 py-1 font-semibold text-zinc-700">
+                      {courseClass.postCount} posts
+                    </span>
+                    <span className="rounded-full bg-red-100 px-3 py-1 font-semibold text-red-700">
+                      {courseClass.reportedCount} reported
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center text-zinc-500">
+              No classes with posts yet.
+            </div>
+          )}
         </section>
       </div>
     </div>

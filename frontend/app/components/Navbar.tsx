@@ -8,6 +8,7 @@ import { BookOpen, Bookmark, Plus, Shield, User } from "lucide-react";
 type AuthUser = {
 	name: string;
 	email: string | null;
+	isAdmin: boolean;
 };
 
 export default function Navbar() {
@@ -38,13 +39,14 @@ export default function Navbar() {
 
 			const { data: profile } = await supabase
 				.from("Users")
-				.select("name, email")
+				.select("name, email, is_admin")
 				.eq("author_id", authUser.id)
 				.maybeSingle();
 
 			setUser({
 				name: profile?.name || fallbackName,
 				email: profile?.email || authUser.email || null,
+				isAdmin: Boolean(profile?.is_admin),
 			});
 		};
 
@@ -87,7 +89,7 @@ export default function Navbar() {
 							<Bookmark className="h-4.5 w-4.5" aria-hidden="true" />
 							<span>Saved Notes</span>
 						</Link>
-						{user && (
+						{user?.isAdmin && (
 							<Link
 								href="/admin"
 								className="inline-flex items-center gap-2 text-[18px] font-medium text-zinc-600 transition hover:text-zinc-900"
@@ -101,13 +103,15 @@ export default function Navbar() {
 					<div className="flex items-center gap-3">
 						{user ? (
 							<>
-								<Link
-									href="/admin"
-									className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-white hover:text-zinc-900 md:hidden"
-								>
-									<Shield className="h-4 w-4" aria-hidden="true" />
-									<span>Admin</span>
-								</Link>
+								{user.isAdmin && (
+									<Link
+										href="/admin"
+										className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-white hover:text-zinc-900 md:hidden"
+									>
+										<Shield className="h-4 w-4" aria-hidden="true" />
+										<span>Admin</span>
+									</Link>
+								)}
 
 								<Link
 									href="/notes"

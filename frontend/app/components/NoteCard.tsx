@@ -64,6 +64,7 @@ export default function NoteCard({ post }: NoteCardProps) {
     courseName: post.course_label,
     semesterName: post.semester_label,
     authorName: post.author_name || post.author_email,
+    authorEmail: post.author_email,
   }).toString();
 
   const visibilityClasses =

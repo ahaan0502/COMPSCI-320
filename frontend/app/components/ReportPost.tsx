@@ -1,179 +1,206 @@
 "use client";
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
 
-type ReportReason = "spam" | "harassment" | "inaccurate";
+import { FormEvent, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createBrowserClient } from "@supabase/ssr";
+import { formatReportReason, submitPostReport, type ReportReason } from "../lib/moderation";
+
+const REPORT_REASONS: ReportReason[] = [
+  "spam",
+  "harassment",
+  "inaccurate",
+  "academic_policy",
+  "other",
+];
 
 export default function ReportPost() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const [isOpen, setIsOpen] = useState(true);
+  const [details, setDetails] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const postId = searchParams.get("postId") ?? "";
   const postTitle = searchParams.get("postTitle") ?? "";
   const courseName = searchParams.get("courseName") ?? "";
   const semesterName = searchParams.get("semesterName") ?? "";
   const authorName = searchParams.get("authorName") ?? "";
-  const reportReason =
-    (searchParams.get("reportReason") as ReportReason | null) ?? "";
+  const authorEmail = searchParams.get("authorEmail") ?? "";
 
-  if (!isOpen) return null;
+  const defaultReason = useMemo(() => {
+    const reason = searchParams.get("reportReason");
+    return REPORT_REASONS.includes(reason as ReportReason) ? (reason as ReportReason) : "inaccurate";
+  }, [searchParams]);
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  const [selectedReason, setSelectedReason] = useState<ReportReason>(defaultReason);
+
+  const closeModal = () => {
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/notes");
+  };
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const numericPostId = Number(postId);
+    if (Number.isNaN(numericPostId)) {
+      setError("Missing post id for this report.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      );
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        throw new Error("Please sign in before reporting a post.");
+      }
+
+      await submitPostReport({
+        postId: numericPostId,
+        reporterId: session.user.id,
+        reason: selectedReason,
+        details,
+      });
+
+      router.push("/notes?reported=1");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Failed to submit report.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex h-screen w-full items-center justify-center bg-gray-100 backdrop-blur-sm font-sans">
-      <div className="relative max-w-xl w-[60vw] h-auto rounded-2xl border-4 border-black bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex h-screen w-full items-center justify-center bg-zinc-100/90 px-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl">
         <button
           type="button"
-          onClick={() => setIsOpen(false)}
-          className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+          onClick={closeModal}
+          className="absolute right-3 top-3 text-zinc-400 transition hover:text-zinc-700"
+          aria-label="Close report form"
         >
           x
         </button>
-        <form onSubmit={handleSubmit}>
-          <h2 className="text-3xl font-bold text-black mb-9">Report Post</h2>
-          <input type="hidden" name="postId" value={postId} />
-          <h1 className="text-2xl font-medium text-black">Post Title</h1>
-          <input
-            type="text"
-            name="postTitle"
-            placeholder="Post title autofilled"
-            defaultValue={postTitle}
-            className="mt-1 block w-full rounded px-2 py-2 border-3 border-[rgb(125,38,34)] text-black focus:outline-none focus:border-[rgb(125,38,34)] focus:ring-[rgb(125,38,34)] bg-[rgb(217,217,217)]"
-          />
 
-          <div className="mt-4 mb-4">
-            <label className="block text-2xl font-medium text-black">Author</label>
-            <input
-              type="text"
-              name="authorName"
-              placeholder="Author name autofilled"
-              defaultValue={authorName}
-              className="mt-1 block w-full rounded px-2 py-2 border-3 border-[rgb(125,38,34)] text-black focus:outline-none focus:border-[rgb(125,38,34)] focus:ring-[rgb(125,38,34)] bg-[rgb(217,217,217)]"
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <h2 className="text-3xl font-bold text-zinc-900">Report Post</h2>
+            <p className="mt-2 text-sm text-zinc-500">This sends the post into the admin moderation queue.</p>
+          </div>
+
+          {error && (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+
+          <input type="hidden" name="postId" value={postId} />
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold uppercase tracking-wide text-zinc-500">Post</label>
+              <input
+                type="text"
+                value={postTitle}
+                readOnly
+                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-zinc-100 px-3 py-2 text-zinc-800"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold uppercase tracking-wide text-zinc-500">Author</label>
+              <input
+                type="text"
+                value={authorEmail || authorName}
+                readOnly
+                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-zinc-100 px-3 py-2 text-zinc-800"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-semibold uppercase tracking-wide text-zinc-500">Course</label>
+                <input
+                  type="text"
+                  value={courseName}
+                  readOnly
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 bg-zinc-100 px-3 py-2 text-zinc-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold uppercase tracking-wide text-zinc-500">Semester</label>
+                <input
+                  type="text"
+                  value={semesterName}
+                  readOnly
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 bg-zinc-100 px-3 py-2 text-zinc-800"
+                />
+              </div>
+            </div>
+          </div>
+
+          <fieldset className="space-y-3">
+            <legend className="text-lg font-semibold text-zinc-900">What&apos;s wrong with this post?</legend>
+
+            {REPORT_REASONS.map((reason) => (
+              <label key={reason} className="flex items-center gap-3 rounded-lg border border-zinc-200 px-3 py-2">
+                <input
+                  type="radio"
+                  name="reportReason"
+                  value={reason}
+                  checked={selectedReason === reason}
+                  onChange={() => setSelectedReason(reason)}
+                  className="h-4 w-4 text-red-800 focus:ring-red-700"
+                />
+                <span className="text-zinc-800">{formatReportReason(reason)}</span>
+              </label>
+            ))}
+          </fieldset>
+
+          <div>
+            <label htmlFor="report-details" className="block text-sm font-semibold uppercase tracking-wide text-zinc-500">
+              Extra details
+            </label>
+            <textarea
+              id="report-details"
+              name="reportDetails"
+              rows={4}
+              value={details}
+              onChange={(event) => setDetails(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-zinc-800 outline-none focus:border-red-700"
+              placeholder="Add any details that help the admin review this report."
             />
           </div>
 
-          <div className="flex gap-4 mt-4 mb-15">
-            <div className="w-1/2">
-              <label className="block text-2xl font-medium text-black">
-                Course
-              </label>
-              <input
-                type="text"
-                name="courseName"
-                placeholder="Course name autofilled"
-                defaultValue={courseName}
-                className="mt-1 block w-full rounded px-2 py-2 border-3 border-[rgb(125,38,34)] text-black focus:outline-none focus:border-[rgb(125,38,34)] focus:ring-[rgb(125,38,34)] bg-[rgb(217,217,217)]"
-              />
-            </div>
-            <div className="w-1/2">
-              <label className="block text-2xl font-medium text-black">
-                Semester
-              </label>
-              <input
-                type="text"
-                name="semesterName"
-                placeholder="Semester name autofilled"
-                defaultValue={semesterName}
-                className="mt-1 block w-full rounded px-2 py-2 border-3 border-[rgb(125,38,34)] text-black focus:outline-none focus:border-[rgb(125,38,34)] focus:ring-[rgb(125,38,34)] bg-[rgb(217,217,217)]"
-              />
-            </div>
-          </div>
-
-          <h1 className="text-2xl font-medium text-black">
-            What&apos;s wrong with this post?
-          </h1>
-
-          <div className="mt-4">
-            <fieldset className="space-y-3">
-              <legend className="sr-only">Report reason</legend>
-
-              <div className="flex items-center">
-                <input
-                  id="reason-spam"
-                  name="reportReason"
-                  type="radio"
-                  value="spam"
-                  defaultChecked={reportReason === "spam"}
-                  className="h-4 w-4 text-[rgb(125,38,34)] focus:ring-[rgb(125,38,34)]"
-                />
-                <label htmlFor="reason-spam" className="ml-2 text-black">
-                  It&apos;s rude, vulgar, or uses bad language.
-                </label>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  id="reason-harassment"
-                  name="reportReason"
-                  type="radio"
-                  value="harassment"
-                  defaultChecked={reportReason === "harassment"}
-                  className="h-4 w-4 text-[rgb(125,38,34)] focus:ring-[rgb(125,38,34)]"
-                />
-                <label htmlFor="reason-harassment" className="ml-2 text-black">
-                  The content in this post is inaccurate with course content.
-                </label>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  id="reason-inaccurate"
-                  name="reportReason"
-                  type="radio"
-                  value="inaccurate"
-                  defaultChecked={reportReason === "inaccurate"}
-                  className="h-4 w-4 text-[rgb(125,38,34)] focus:ring-[rgb(125,38,34)]"
-                />
-                <label htmlFor="reason-inaccurate" className="ml-2 text-black">
-                  This post breaks academic policy.
-                </label>
-              </div>
-
-              {/*<div className="flex items-center">
-              <input
-                id="reason-other"
-                name="reportReason"
-                type="radio"
-                value="other"
-                className="h-4 w-4 text-[rgb(125,38,34)] focus:ring-[rgb(125,38,34)]"
-              />
-              <label htmlFor="reason-other" className="ml-2 text-black">
-                Other
-              </label>
-              </div>*/}
-            </fieldset>
-
-            {/*<label
-            htmlFor="report-details"
-            className="block mt-3 text-sm text-gray-600"
-          >
-            More details (optional)
-          </label>
-          <textarea
-            id="report-details"
-            name="reportDetails"
-            rows={4}
-            className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-black"
-            placeholder="Add any additional information that will help reviewers..."
-          />*/}
-          </div>
-
-          <div className="mt-6 flex gap-4 justify-end">
+          <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={() => setIsOpen(false)}
-              className="bg-[rgb(180,180,180)] font-semibold text-xl text-black px-6 py-2 rounded-lg"
+              onClick={closeModal}
+              className="rounded-lg border border-zinc-300 px-5 py-2 font-semibold text-zinc-700 transition hover:bg-zinc-100"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="bg-[rgb(125,38,34)] font-semibold text-xl text-white px-8 py-2 rounded-lg"
+              disabled={isSubmitting}
+              className="rounded-lg bg-red-800 px-6 py-2 font-semibold text-white transition hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Report Post
+              {isSubmitting ? "Submitting..." : "Report Post"}
             </button>
           </div>
         </form>
