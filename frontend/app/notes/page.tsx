@@ -30,6 +30,7 @@ interface SupabasePostRow {
   course_id: number | null;
   semester_id: number | null;
   is_report: boolean | null;
+  attachment_url: string | null;
   Users: {
     name: string | null;
     email: string | null;
@@ -265,6 +266,7 @@ function NotesPageContent() {
           course_id: post.course_id,
           semester_id: post.semester_id,
           is_report: post.is_report ?? false,
+          attachment_url: post.attachment_url,
           author_name: user?.name ?? 'Unknown',
           author_email: user?.email ?? '',
           course_label: `${course?.course_number ?? ''} - ${course?.title ?? ''}`,

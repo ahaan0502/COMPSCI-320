@@ -1,4 +1,5 @@
 import {
+  Paperclip,
   ArrowDown,
   ArrowUp,
   Flag,
@@ -26,6 +27,7 @@ export interface NotePost {
   course_id: number | null;
   semester_id: number | null;
   is_report: boolean;
+  attachment_url?: string | null;
   author_name: string;
   author_email: string;
   course_label: string;
@@ -71,6 +73,9 @@ export default function NoteCard({ post }: NoteCardProps) {
       ? "bg-violet-100 text-violet-700"
       : "bg-emerald-100 text-emerald-700";
   const authorLabel = post.author_name || post.author_email || "Unknown";
+  const attachmentName = post.attachment_url
+    ? decodeURIComponent(post.attachment_url.split("/").pop()?.split("?")[0] || "attachment")
+    : null;
 
   return (
     <article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5">
@@ -120,6 +125,20 @@ export default function NoteCard({ post }: NoteCardProps) {
           <p className="mb-4 whitespace-pre-wrap text-[1.03rem] leading-relaxed text-zinc-700">
             {post.body}
           </p>
+
+          {post.attachment_url && (
+            <div className="mb-4">
+              <a
+                href={post.attachment_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900"
+              >
+                <Paperclip className="h-4 w-4" />
+                <span className="max-w-[20rem] truncate">{attachmentName || "View attachment"}</span>
+              </a>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-4 text-zinc-600">
             <button

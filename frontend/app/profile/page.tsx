@@ -65,6 +65,7 @@ const mockPosts: NotePost[] = [
     course_id: 1,
     semester_id: 1,
     is_report: false,
+    attachment_url: null,
     author_name: 'You',
     author_email: 'you@umass.edu',
     course_label: 'CS 240',

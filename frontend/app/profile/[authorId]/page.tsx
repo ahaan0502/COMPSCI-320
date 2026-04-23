@@ -34,6 +34,7 @@ interface SupabasePostRow {
   course_id: number | null;
   semester_id: number | null;
   is_report: boolean | null;
+  attachment_url: string | null;
   Users:
     | {
         name: string | null;
@@ -133,6 +134,7 @@ export default function AuthorProfilePage() {
           course_id,
           semester_id,
           is_report,
+          attachment_url,
           Users (
             name,
             email
@@ -178,6 +180,7 @@ export default function AuthorProfilePage() {
           course_id: post.course_id,
           semester_id: post.semester_id,
           is_report: post.is_report ?? false,
+          attachment_url: post.attachment_url,
           author_name: user?.name ?? profileRow.name ?? profileRow.email,
           author_email: user?.email ?? profileRow.email,
           course_label: `${course?.course_number ?? ''}${course?.title ? ` - ${course.title}` : ''}`.trim(),
