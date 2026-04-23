@@ -1,187 +1,103 @@
 'use client';
 
-import React, { useState } from "react";
+import { useState } from "react";
+import NoteCard, { type NotePost } from '../components/NoteCard';
 
-/* =========================
-   Types
-========================= */
-interface Post {
-  id: string;
-  title: string;
-  content: string;
-  votes: number;
-}
+export default function SavedNotesPage() {
+  const [savedPosts, setSavedPosts] = useState<NotePost[]>([
+    {
+      id: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      author_id: "1",
+      author_name: "John Doe",
+      author_email: "john@example.com",
+      title: "Binary Trees Explained",
+      body: "A binary tree is a hierarchical structure...",
+      purpose: null,
+      visibility: "public",
+      group_id: null,
+      tags: [],
+      votes: 12,
+      is_deleted: false,
+      course_id: 1,
+      semester_id: 1,
+      is_report: false,
+      course_label: "CS101",
+      semester_label: "Fall 2025",
+      comments_count: 3,
+    },
+    {
+      id: 2,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      author_id: "2",
+      author_name: "Jane Smith",
+      author_email: "jane@example.com",
+      title: "QuickSort Notes",
+      body: "QuickSort uses divide and conquer...",
+      purpose: null,
+      visibility: "private",
+      group_id: null,
+      tags: [],
+      votes: 8,
+      is_deleted: false,
+      course_id: 1,
+      semester_id: 1,
+      is_report: false,
+      course_label: "CS201",
+      semester_label: "Spring 2026",
+      comments_count: 1,
+    },
+  ]);
 
-/* =========================
-   SVG Icons
-========================= */
-const BookMarkedIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-6 h-6">
-    <path d="M6 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18l-6-3-6 3V4z" />
-  </svg>
-);
+  const handleUnsave = (id: number) => {
+    setSavedPosts((prev) => prev.filter((post) => post.id !== id));
+  };
 
-const FileIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-12 h-12">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <polyline points="14 2 14 8 20 8" />
-  </svg>
-);
-
-/* =========================
-   Props
-========================= */
-interface SavedNotesViewProps {
-  savedPosts: Post[];
-  onVote: (postId: string, voteType: "up" | "down") => void;
-  onComment: (postId: string, comment: string) => void;
-  onUnsave?: (postId: string) => void;
-}
-
-/* =========================
-   Component
-========================= */
-export function SavedNotesView({
-  savedPosts,
-  onVote,
-  onComment,
-  onUnsave,
-}: SavedNotesViewProps) {
   return (
-    <div className="max-w-5xl mx-auto p-6 bg-white min-h-screen">
+    <main className="min-h-screen w-full bg-gray-50 px-6 py-10">
       
       {/* Header */}
-      <div className="mb-10">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="bg-[#f5e8e8] p-3 rounded-lg text-[#7A1F1F]">
-            <BookMarkedIcon />
-          </div>
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-            Saved Notes
-          </h1>
-        </div>
-        <p className="text-gray-600">
-          Quickly access notes you&apos;ve bookmarked for later.
+      <div className="mb-8">
+        <h1 className="text-3xl font-extrabold text-zinc-900">
+          Saved Notes
+        </h1>
+        <p className="mt-2 text-zinc-600">
+          All the notes you’ve bookmarked in one place.
         </p>
       </div>
 
       {/* Content */}
       {savedPosts.length > 0 ? (
-        <div className="space-y-5">
+        <div className="flex flex-col gap-5">
           {savedPosts.map((post) => (
-            <div
-              key={post.id}
-              className="border border-gray-200 rounded-xl p-5 bg-white transition-all hover:shadow-md hover:border-[#7A1F1F]"
-            >
-              <h2 className="text-xl font-bold text-gray-900 mb-2">
-                {post.title}
-              </h2>
-              <p className="text-gray-600 mb-4">
-                {post.content}
-              </p>
+            
+            /* Wrapper so we DON'T modify NoteCard */
+            <div key={post.id} className="relative">
+              
+              {/* Unsave Button */}
+              <button
+                onClick={() => handleUnsave(post.id)}
+                className="absolute right-4 top-4 z-10 text-sm font-semibold text-red-600 hover:underline"
+              >
+                Unsave
+              </button>
 
-              <div className="flex items-center justify-between">
-                
-                {/* Voting */}
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => onVote(post.id, "up")}
-                    className="text-sm font-semibold text-gray-500 hover:text-green-600"
-                  >
-                    ▲
-                  </button>
-                  <span className="text-sm font-medium text-gray-700">
-                    {post.votes}
-                  </span>
-                  <button
-                    onClick={() => onVote(post.id, "down")}
-                    className="text-sm font-semibold text-gray-500 hover:text-red-600"
-                  >
-                    ▼
-                  </button>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => onComment(post.id, "Nice note!")}
-                    className="text-sm font-medium text-gray-500 hover:text-[#7A1F1F]"
-                  >
-                    Comment
-                  </button>
-
-                  {onUnsave && (
-                    <button
-                      onClick={() => onUnsave(post.id)}
-                      className="text-sm font-semibold text-[#7A1F1F] hover:underline"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </div>
+              <NoteCard post={post} />
             </div>
           ))}
         </div>
       ) : (
-        <div className="text-center py-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-          <div className="text-gray-300 flex justify-center mb-4">
-            <FileIcon />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-200 bg-white py-20 text-center">
+          <p className="text-lg font-semibold text-zinc-800">
             No saved notes yet
-          </h3>
-          <p className="text-gray-500 font-medium">
-            Save notes by clicking the bookmark icon on posts.
+          </p>
+          <p className="mt-2 text-zinc-500">
+            Bookmark notes to see them here.
           </p>
         </div>
       )}
-    </div>
-  );
-}
-
-/* =========================
-   PAGE (FIXED)
-========================= */
-export default function Page() {
-  const [savedPosts, setSavedPosts] = useState<Post[]>([
-    {
-      id: "1",
-      title: "Binary Trees Explained",
-      content: "A binary tree is a hierarchical structure...",
-      votes: 12,
-    },
-    {
-      id: "2",
-      title: "QuickSort Notes",
-      content: "QuickSort uses divide and conquer...",
-      votes: 8,
-    },
-  ]);
-
-  const handleUnsave = (id: string) => {
-    setSavedPosts((prev) => prev.filter((post) => post.id !== id));
-  };
-
-  const handleVote = (id: string, type: "up" | "down") => {
-    setSavedPosts((prev) =>
-      prev.map((post) =>
-        post.id === id
-          ? {
-              ...post,
-              votes: type === "up" ? post.votes + 1 : post.votes - 1,
-            }
-          : post
-      )
-    );
-  };
-
-  return (
-    <SavedNotesView
-      savedPosts={savedPosts}
-      onVote={handleVote}
-      onComment={(id, comment) => console.log(id, comment)}
-      onUnsave={handleUnsave}
-    />
+    </main>
   );
 }
