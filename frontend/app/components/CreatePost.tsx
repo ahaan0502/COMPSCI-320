@@ -2,6 +2,7 @@
 
 import { type ChangeEvent, useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
+import { isUserBannedFromCourse } from '../lib/moderation';
 
 interface CreatePostProps {
   onSuccess?: () => void;
@@ -179,6 +180,11 @@ export function CreatePost({ onSuccess }: CreatePostProps) {
       }
 
       let attachmentUrl: string | null = null;
+
+      if (await isUserBannedFromCourse(courseId, session.user.id)) {
+        setError('You are currently banned from posting in that class.');
+        return;
+      }
 
       if (selectedFile) {
         attachmentUrl = await uploadFileToStorage(selectedFile, session.user.id);

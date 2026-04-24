@@ -2,8 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { useRouter } from 'next/navigation';
-import NoteCard, { NotePost } from '../components/NoteCard';
+import NoteCard, { type NotePost, type PostVisibility } from '../components/NoteCard';
 
 const UserIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-16 w-16">
@@ -26,55 +25,194 @@ const CameraIcon = () => (
   </svg>
 );
 
-type TabType = 'posts' | 'saved' | 'liked' | 'comments';
+type TabType = 'posts' | 'liked' | 'comments';
 
-interface Comment {
+interface CommentItem {
   id: string;
   postTitle: string;
   content: string;
-  date: string;
 }
 
-interface UserProfileState {
+interface EnrolledCourseItem {
   id: string;
-  email: string;
-  name: string;
-  avatarUrl: string | null;
+  label: string;
+  semesterLabel: string;
 }
 
-const supabase = () =>
-  createBrowserClient(
+interface ProfileState {
+  userId: string;
+  displayName: string;
+  handleOrFallback: string;
+  email: string;
+  major: string | null;
+  avatarUrl: string | null;
+  posts: NotePost[];
+  likedPosts: NotePost[];
+  comments: CommentItem[];
+  courses: EnrolledCourseItem[];
+}
+
+interface SupabasePostRow {
+  post_id: number;
+  created_at: string;
+  author_id: string;
+  title: string | null;
+  body: string | null;
+  purpose: string | null;
+  visibility: string | null;
+  group_id: number | null;
+  tags: unknown;
+  votes: number | null;
+  updated_at: string | null;
+  course_id: number | null;
+  semester_id: number | null;
+  is_report: boolean | null;
+  attachment_url: string | null;
+  Users:
+    | {
+        name: string | null;
+        email: string | null;
+      }[]
+    | {
+        name: string | null;
+        email: string | null;
+      }
+    | null;
+  Courses:
+    | {
+        course_number: string | null;
+        title: string | null;
+      }[]
+    | {
+        course_number: string | null;
+        title: string | null;
+      }
+    | null;
+  Semesters:
+    | {
+        term: string | null;
+        year: string | null;
+      }[]
+    | {
+        term: string | null;
+        year: string | null;
+      }
+    | null;
+}
+
+interface CommentRow {
+  id: number;
+  body: string;
+  post_id: number | null;
+  Posts:
+    | {
+        title: string | null;
+      }[]
+    | {
+        title: string | null;
+      }
+    | null;
+}
+
+interface EnrolledCourseRow {
+  course_id: number;
+  semester_id: number;
+  Courses:
+    | {
+        course_number: string | null;
+        title: string | null;
+      }[]
+    | {
+        course_number: string | null;
+        title: string | null;
+      }
+    | null;
+  Semesters:
+    | {
+        term: string | null;
+        year: string | null;
+      }[]
+    | {
+        term: string | null;
+        year: string | null;
+      }
+    | null;
+}
+
+function getClient() {
+  return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
+}
 
-const mockPosts: NotePost[] = [
-  {
-    id: 1,
-    created_at: new Date().toISOString(),
-    author_id: '1',
-    title: 'CS 240 - Probability Summary',
-    body: 'Summary of key concepts.',
-    purpose: 'Study',
-    visibility: 'public',
-    group_id: null,
-    tags: [],
-    votes: 32,
-    updated_at: new Date().toISOString(),
-    is_deleted: false,
-    course_id: 1,
-    semester_id: 1,
-    is_report: false,
-    attachment_url: null,
-    author_name: 'You',
-    author_email: 'you@umass.edu',
-    course_label: 'CS 240',
-    semester_label: 'Spring 2026',
-    comments_count: 0,
-  },
-];
+function firstRelation<T>(value: T[] | T | null): T | null {
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
 
-const mockComments: Comment[] = [];
+function normalizeVisibility(visibility: string | null): PostVisibility {
+  return visibility === 'private' ? 'private' : 'public';
+}
+
+function normalizeTags(tags: unknown): string[] {
+  if (Array.isArray(tags)) {
+    return tags.filter((value): value is string => typeof value === 'string');
+  }
+
+  return [];
+}
+
+function emailLocalPart(email: string) {
+  return email.split('@')[0] || 'User';
+}
+
+function formatFallbackName(email: string) {
+  return emailLocalPart(email)
+    .replace(/[._-]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatDisplayName(name: string | null | undefined, fallbackEmail: string, metadataName?: string | null) {
+  const cleanedName = name?.trim();
+  if (cleanedName) return cleanedName;
+
+  const cleanedMetadata = metadataName?.trim();
+  if (cleanedMetadata) return cleanedMetadata;
+
+  return formatFallbackName(fallbackEmail);
+}
+
+function mapPosts(posts: SupabasePostRow[], commentsCountByPost: Map<number, number>): NotePost[] {
+  return posts.map((post) => {
+    const user = firstRelation(post.Users);
+    const course = firstRelation(post.Courses);
+    const semester = firstRelation(post.Semesters);
+
+    return {
+      id: post.post_id,
+      created_at: post.created_at,
+      author_id: post.author_id,
+      title: post.title ?? '',
+      body: post.body ?? '',
+      purpose: post.purpose,
+      visibility: normalizeVisibility(post.visibility),
+      group_id: post.group_id,
+      tags: normalizeTags(post.tags),
+      votes: post.votes ?? 0,
+      updated_at: post.updated_at ?? post.created_at,
+      is_deleted: false,
+      course_id: post.course_id,
+      semester_id: post.semester_id,
+      is_report: Boolean(post.is_report),
+      attachment_url: post.attachment_url,
+      author_name: user?.name ?? 'Unknown',
+      author_email: user?.email ?? '',
+      course_label: `${course?.course_number ?? 'Unknown course'} - ${course?.title ?? 'Untitled course'}`,
+      semester_label: `${semester?.term ?? ''} ${semester?.year ?? ''}`.trim() || 'Unknown semester',
+      comments_count: commentsCountByPost.get(post.post_id) ?? 0,
+    };
+  });
+}
 
 function EmptyState({ message }: { message: string }) {
   return (
@@ -84,69 +222,255 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-export default function Page() {
-  const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [profile, setProfile] = useState<UserProfileState | null>(null);
-  const [username, setUsername] = useState('NewUser');
+export default function ProfilePage() {
+  const [profile, setProfile] = useState<ProfileState | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('posts');
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [tempUsername, setTempUsername] = useState(username);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [tempDisplayName, setTempDisplayName] = useState('');
 
-  const savedPosts: NotePost[] = [];
-  const likedPosts: NotePost[] = [];
-  const userComments = mockComments;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadProfile = async () => {
-      const client = supabase();
-      const { data: { user } } = await client.auth.getUser();
+      const supabase = getClient();
 
-      if (!user?.email) {
-        setProfile(null);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.user) {
+          setError('Please sign in to view your profile.');
+          setLoading(false);
+          return;
+        }
+
+        const email = session.user.email ?? '';
+        const metadataName =
+          session.user.user_metadata?.full_name ||
+          session.user.user_metadata?.name ||
+          null;
+
+        const { data: userProfile, error: userError } = await supabase
+          .from('Users')
+          .select('name, email, major, avatar_url')
+          .eq('author_id', session.user.id)
+          .maybeSingle();
+
+        if (userError) {
+          throw userError;
+        }
+
+        const [{ data: postsData, error: postsError }, { data: commentCountsData, error: commentCountsError }, { data: votesData, error: votesError }, { data: commentsData, error: commentsError }, { data: coursesData, error: coursesError }] =
+          await Promise.all([
+            supabase
+              .from('Posts')
+              .select(`
+                post_id,
+                created_at,
+                author_id,
+                title,
+                body,
+                purpose,
+                visibility,
+                group_id,
+                tags,
+                votes,
+                updated_at,
+                course_id,
+                semester_id,
+                is_report,
+                attachment_url,
+                Users (
+                  name,
+                  email
+                ),
+                Courses (
+                  course_number,
+                  title
+                ),
+                Semesters (
+                  term,
+                  year
+                )
+              `)
+              .eq('author_id', session.user.id)
+              .order('created_at', { ascending: false }),
+            supabase.from('Comments').select('post_id'),
+            supabase.from('Post_Votes').select('post_id').eq('user_id', session.user.id).eq('value', 1),
+            supabase
+              .from('Comments')
+              .select(`
+                id,
+                body,
+                post_id,
+                Posts (
+                  title
+                )
+              `)
+              .eq('author_id', session.user.id)
+              .order('id', { ascending: false }),
+            supabase
+              .from('Student_Enrolled_Courses')
+              .select(`
+                course_id,
+                semester_id,
+                Courses (
+                  course_number,
+                  title
+                ),
+                Semesters (
+                  term,
+                  year
+                )
+              `)
+              .eq('author_id', session.user.id)
+              .order('course_id', { ascending: true }),
+          ]);
+
+        if (postsError) throw postsError;
+        if (commentCountsError) throw commentCountsError;
+        if (votesError) throw votesError;
+        if (commentsError) throw commentsError;
+        if (coursesError) throw coursesError;
+
+        const commentsCountByPost = new Map<number, number>();
+        for (const row of (commentCountsData || []) as { post_id: number | null }[]) {
+          if (typeof row.post_id !== 'number') continue;
+          commentsCountByPost.set(row.post_id, (commentsCountByPost.get(row.post_id) ?? 0) + 1);
+        }
+
+        const ownPosts = mapPosts((postsData || []) as SupabasePostRow[], commentsCountByPost);
+
+        const likedPostIds = Array.from(
+          new Set(
+            ((votesData || []) as { post_id: number }[])
+              .map((vote) => vote.post_id)
+              .filter((postId): postId is number => typeof postId === 'number'),
+          ),
+        );
+
+        let likedPosts: NotePost[] = [];
+        if (likedPostIds.length > 0) {
+          const { data: likedPostsData, error: likedPostsError } = await supabase
+            .from('Posts')
+            .select(`
+              post_id,
+              created_at,
+              author_id,
+              title,
+              body,
+              purpose,
+              visibility,
+              group_id,
+              tags,
+              votes,
+              updated_at,
+              course_id,
+              semester_id,
+              is_report,
+              attachment_url,
+              Users (
+                name,
+                email
+              ),
+              Courses (
+                course_number,
+                title
+              ),
+              Semesters (
+                term,
+                year
+              )
+            `)
+            .in('post_id', likedPostIds)
+            .order('created_at', { ascending: false });
+
+          if (likedPostsError) throw likedPostsError;
+
+          likedPosts = mapPosts((likedPostsData || []) as SupabasePostRow[], commentsCountByPost);
+        }
+
+        const displayName = formatDisplayName(userProfile?.name, userProfile?.email || email, metadataName);
+        const courses = ((coursesData || []) as EnrolledCourseRow[]).map((row) => {
+          const course = firstRelation(row.Courses);
+          const semester = firstRelation(row.Semesters);
+
+          return {
+            id: `${row.course_id}:${row.semester_id}`,
+            label: `${course?.course_number ?? `Course ${row.course_id}`} - ${course?.title ?? 'Untitled course'}`,
+            semesterLabel: `${semester?.term ?? ''} ${semester?.year ?? ''}`.trim() || 'Unknown semester',
+          };
+        });
+
+        const comments = ((commentsData || []) as CommentRow[]).map((comment) => ({
+          id: String(comment.id),
+          postTitle: firstRelation(comment.Posts)?.title ?? 'Untitled post',
+          content: comment.body,
+        }));
+
+        setProfile({
+          userId: session.user.id,
+          displayName,
+          handleOrFallback: displayName,
+          email: userProfile?.email || email,
+          major: userProfile?.major ?? null,
+          avatarUrl: userProfile?.avatar_url ?? null,
+          posts: ownPosts,
+          likedPosts,
+          comments,
+          courses,
+        });
+        setTempDisplayName(displayName);
+      } catch (loadError) {
+        console.error('Profile load failed:', loadError);
+        setError(loadError instanceof Error ? loadError.message : 'Failed to load profile.');
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const fallbackName =
-        user.user_metadata?.full_name ||
-        user.user_metadata?.name ||
-        user.email.split('@')[0] ||
-        'User';
-
-      const { data: userRow, error: profileError } = await client
-        .from('Users')
-        .select('name, email, avatar_url')
-        .eq('author_id', user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        console.error('Failed to load profile:', profileError);
-        setError('Failed to load profile.');
-        setLoading(false);
-        return;
-      }
-
-      const resolvedName = userRow?.name || fallbackName;
-      setProfile({
-        id: user.id,
-        email: userRow?.email || user.email,
-        name: resolvedName,
-        avatarUrl: userRow?.avatar_url || null,
-      });
-      setUsername(resolvedName.replace(/\s+/g, '').toLowerCase());
-      setLoading(false);
     };
 
-    loadProfile();
+    void loadProfile();
   }, []);
 
-  const handleSaveUsername = () => {
-    setUsername(tempUsername);
-    setIsEditModalOpen(false);
+  const handleSaveDisplayName = async () => {
+    if (!profile) return;
+
+    const nextName = tempDisplayName.trim();
+    if (!nextName) {
+      setIsEditModalOpen(false);
+      return;
+    }
+
+    try {
+      const supabase = getClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        throw new Error('Please sign in to update your profile.');
+      }
+
+      const { error: updateError } = await supabase
+        .from('Users')
+        .update({ name: nextName })
+        .eq('author_id', session.user.id);
+
+      if (updateError) throw updateError;
+
+      setProfile({
+        ...profile,
+        displayName: nextName,
+        handleOrFallback: nextName,
+      });
+      setIsEditModalOpen(false);
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'Failed to update display name.');
+    }
   };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,14 +488,14 @@ export default function Page() {
     }
 
     const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const path = `${profile.id}/${Date.now()}.${extension}`;
-    const client = supabase();
+    const path = `${profile.userId}/${Date.now()}.${extension}`;
+    const supabase = getClient();
 
     setUploading(true);
     setError(null);
 
     try {
-      const { error: uploadError } = await client.storage
+      const { error: uploadError } = await supabase.storage
         .from('profile-pictures')
         .upload(path, file, {
           cacheControl: '3600',
@@ -179,26 +503,25 @@ export default function Page() {
           contentType: file.type,
         });
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
-      const { data: publicUrlData } = client.storage
+      const { data: publicUrlData } = supabase.storage
         .from('profile-pictures')
         .getPublicUrl(path);
 
       const avatarUrl = publicUrlData.publicUrl;
 
-      const { error: updateError } = await client
+      const { error: updateError } = await supabase
         .from('Users')
         .update({ avatar_url: avatarUrl })
-        .eq('author_id', profile.id);
+        .eq('author_id', profile.userId);
 
-      if (updateError) {
-        throw updateError;
-      }
+      if (updateError) throw updateError;
 
-      setProfile((current) => current ? { ...current, avatarUrl: `${avatarUrl}?t=${Date.now()}` } : current);
+      setProfile({
+        ...profile,
+        avatarUrl: `${avatarUrl}?t=${Date.now()}`,
+      });
     } catch (uploadError) {
       console.error('Failed to upload profile picture:', uploadError);
       setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload profile picture.');
@@ -208,13 +531,6 @@ export default function Page() {
     }
   };
 
-  const tabs = [
-    { id: 'posts', label: 'My Posts', count: mockPosts.length },
-    { id: 'saved', label: 'Saved', count: savedPosts.length },
-    { id: 'liked', label: 'Liked', count: likedPosts.length },
-    { id: 'comments', label: 'Comments', count: userComments.length },
-  ];
-
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-white">
@@ -223,37 +539,28 @@ export default function Page() {
     );
   }
 
-  if (!profile) {
+  if (error || !profile) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-white px-6">
-        <div className="max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-          <h1 className="mb-2 text-2xl font-extrabold text-gray-900">Sign in to view your profile</h1>
-          <p className="mb-6 text-gray-600">Your profile picture is tied to your UNotes account.</p>
-          <button
-            type="button"
-            onClick={() => router.push('/auth/google')}
-            className="rounded-lg bg-[#7A1F1F] px-5 py-3 font-bold text-white transition hover:bg-[#5a1616]"
-          >
-            Sign In
-          </button>
+        <div className="max-w-xl rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
+          <h1 className="mb-2 text-3xl font-bold tracking-tight text-zinc-800">Profile Unavailable</h1>
+          <p className="text-zinc-600">{error ?? 'Unable to load profile.'}</p>
         </div>
       </main>
     );
   }
 
-  const realName = profile.name || profile.email.split('@')[0];
+  const tabs = [
+    { id: 'posts', label: 'My Posts', count: profile.posts.length },
+    { id: 'liked', label: 'Liked', count: profile.likedPosts.length },
+    { id: 'comments', label: 'Comments', count: profile.comments.length },
+  ] as const;
 
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-6xl p-6">
-        {error && (
-          <div className="mb-6 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {error}
-          </div>
-        )}
-
         <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-          <div className="flex flex-col items-center gap-8 md:flex-row md:items-start">
+          <div className="flex flex-col gap-8 md:flex-row md:items-start">
             <div className="group relative">
               <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-[#f5e8e8] text-[#7A1F1F] shadow-md">
                 {profile.avatarUrl ? (
@@ -268,25 +575,20 @@ export default function Page() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
                 className="absolute bottom-0 right-0 rounded-full border-2 border-white bg-[#7A1F1F] p-2 text-white shadow-lg transition-all hover:bg-[#5a1616] disabled:cursor-not-allowed disabled:opacity-60"
+                title="Upload a profile photo"
               >
                 <CameraIcon />
               </button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept="image/*"
-                onChange={handleImageUpload}
-              />
+              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
             </div>
 
             <div className="flex-1 text-center md:text-left">
               <div className="mb-1 flex items-center justify-center gap-3 md:justify-start">
-                <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">{realName}</h1>
+                <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">{profile.displayName}</h1>
                 <button
                   type="button"
                   onClick={() => {
-                    setTempUsername(username);
+                    setTempDisplayName(profile.displayName);
                     setIsEditModalOpen(true);
                   }}
                   className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-[#f5e8e8] hover:text-[#7A1F1F]"
@@ -294,11 +596,28 @@ export default function Page() {
                   <EditIcon />
                 </button>
               </div>
-              <p className="mb-4 text-sm font-bold uppercase tracking-widest text-[#7A1F1F]">@{username}</p>
+              <p className="mb-3 text-sm font-bold uppercase tracking-widest text-[#7A1F1F]">{profile.handleOrFallback}</p>
               <p className="text-sm font-medium text-gray-500">{profile.email}</p>
+              {profile.major && <p className="mt-2 text-sm text-gray-500">{profile.major}</p>}
               <p className="mt-3 text-sm text-gray-400">
                 {uploading ? 'Uploading profile picture...' : 'Profile picture changes save automatically.'}
               </p>
+
+              <div className="mt-5">
+                <p className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-400">My Classes</p>
+                {profile.courses.length > 0 ? (
+                  <div className="flex flex-wrap justify-center gap-2 md:justify-start">
+                    {profile.courses.map((course) => (
+                      <div key={course.id} className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
+                        {course.label}
+                        <span className="ml-2 text-zinc-400">{course.semesterLabel}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">No enrolled classes found.</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -308,17 +627,17 @@ export default function Page() {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id as TabType)}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-6 py-4 text-sm font-bold tracking-tight transition-all ${
-                activeTab === tab.id
-                  ? 'border-[#7A1F1F] text-[#7A1F1F]'
-                  : 'border-transparent text-gray-400 hover:text-gray-600'
+                activeTab === tab.id ? 'border-[#7A1F1F] text-[#7A1F1F]' : 'border-transparent text-gray-400 hover:text-gray-600'
               }`}
             >
               {tab.label}
-              <span className={`rounded-full px-2 py-0.5 text-[10px] ${
-                activeTab === tab.id ? 'bg-[#7A1F1F] text-white' : 'bg-gray-100 text-gray-400'
-              }`}>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] ${
+                  activeTab === tab.id ? 'bg-[#7A1F1F] text-white' : 'bg-gray-100 text-gray-400'
+                }`}
+              >
                 {tab.count}
               </span>
             </button>
@@ -326,49 +645,55 @@ export default function Page() {
         </div>
 
         <div className="space-y-4">
-          {activeTab === 'posts' && (
-            mockPosts.length > 0 ? mockPosts.map((post) => <NoteCard key={post.id} post={post} />) : <EmptyState message="No posts shared." />
-          )}
+          {activeTab === 'posts' &&
+            (profile.posts.length > 0 ? profile.posts.map((post) => <NoteCard key={post.id} post={post} />) : <EmptyState message="No posts shared." />)}
 
-          {activeTab === 'saved' && (
-            savedPosts.length > 0 ? savedPosts.map((post) => <NoteCard key={post.id} post={post} />) : <EmptyState message="No saved notes." />
-          )}
+          {activeTab === 'liked' &&
+            (profile.likedPosts.length > 0 ? (
+              profile.likedPosts.map((post) => <NoteCard key={post.id} post={post} />)
+            ) : (
+              <EmptyState message="No liked content." />
+            ))}
 
-          {activeTab === 'liked' && (
-            likedPosts.length > 0 ? likedPosts.map((post) => <NoteCard key={post.id} post={post} />) : <EmptyState message="No liked content." />
-          )}
-
-          {activeTab === 'comments' && (
-            userComments.length > 0 ? (
-              userComments.map((comment) => (
+          {activeTab === 'comments' &&
+            (profile.comments.length > 0 ? (
+              profile.comments.map((comment) => (
                 <div key={comment.id} className="rounded-xl border border-gray-200 bg-white p-6 transition-all hover:border-[#7A1F1F]">
-                  <div className="mb-2 flex justify-between">
+                  <div className="mb-2 flex items-start justify-between">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-[#7A1F1F]">On: {comment.postTitle}</span>
                   </div>
                   <p className="py-1 font-medium text-gray-700">&quot;{comment.content}&quot;</p>
-                  <p className="mt-2 text-[10px] font-bold text-gray-400">{comment.date}</p>
                 </div>
               ))
-            ) : <EmptyState message="No comments yet." />
-          )}
+            ) : (
+              <EmptyState message="No comments yet." />
+            ))}
         </div>
 
         {isEditModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
-              <h2 className="mb-6 text-2xl font-bold text-gray-900">Update Profile Handle</h2>
+              <h2 className="mb-6 text-2xl font-bold text-gray-900">Update Display Name</h2>
               <input
                 type="text"
-                value={tempUsername}
-                onChange={(event) => setTempUsername(event.target.value)}
+                value={tempDisplayName}
+                onChange={(event) => setTempDisplayName(event.target.value)}
                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 font-bold text-gray-900 outline-none focus:border-[#7A1F1F]"
                 autoFocus
               />
               <div className="mt-8 flex gap-3">
-                <button type="button" onClick={() => setIsEditModalOpen(false)} className="flex-1 rounded-xl py-3 font-bold text-gray-400 transition-colors hover:bg-gray-50">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="flex-1 rounded-xl py-3 font-bold text-gray-400 transition-colors hover:bg-gray-50"
+                >
                   Cancel
                 </button>
-                <button type="button" onClick={handleSaveUsername} className="flex-1 rounded-xl bg-[#7A1F1F] py-3 font-bold text-white shadow-lg shadow-[#7A1F1F]/20">
+                <button
+                  type="button"
+                  onClick={() => void handleSaveDisplayName()}
+                  className="flex-1 rounded-xl bg-[#7A1F1F] py-3 font-bold text-white shadow-lg shadow-[#7A1F1F]/20"
+                >
                   Update
                 </button>
               </div>

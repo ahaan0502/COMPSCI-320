@@ -2,15 +2,16 @@
 
 import { useState } from 'react';
 import { AlertTriangle, ArrowDown, ArrowUp, CircleCheck, MessageSquare, Pencil, Trash2 } from 'lucide-react';
-import type { AdminPost } from '../lib/adminMockData';
+import type { AdminPost } from '../lib/moderation';
 
 interface ModerationPostCardProps {
   post: AdminPost;
   isAuthorBanned: boolean;
-  onSaveEdit: (postId: number, updates: { title: string; body: string }) => void;
-  onDelete: (postId: number) => void;
-  onBanUser: (classId: number, userId: string) => void;
-  onUnbanUser: (classId: number, userId: string) => void;
+  onSaveEdit: (postId: number, updates: { title: string; body: string }) => Promise<void> | void;
+  onDelete: (postId: number) => Promise<void> | void;
+  onResolveReports: (postId: number) => Promise<void> | void;
+  onBanUser: (classId: number, userId: string) => Promise<void> | void;
+  onUnbanUser: (classId: number, userId: string) => Promise<void> | void;
 }
 
 export default function ModerationPostCard({
@@ -18,6 +19,7 @@ export default function ModerationPostCard({
   isAuthorBanned,
   onSaveEdit,
   onDelete,
+  onResolveReports,
   onBanUser,
   onUnbanUser,
 }: ModerationPostCardProps) {
@@ -25,11 +27,15 @@ export default function ModerationPostCard({
   const [titleDraft, setTitleDraft] = useState(post.title);
   const [bodyDraft, setBodyDraft] = useState(post.body);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const nextTitle = titleDraft.trim() || post.title;
     const nextBody = bodyDraft.trim() || post.body;
-    onSaveEdit(post.id, { title: nextTitle, body: nextBody });
-    setIsEditing(false);
+    try {
+      await onSaveEdit(post.id, { title: nextTitle, body: nextBody });
+      setIsEditing(false);
+    } catch {
+      // Parent handles surfaced moderation errors.
+    }
   };
 
   const canModerateAuthor = post.course_id !== null;
@@ -79,36 +85,36 @@ export default function ModerationPostCard({
 
           {isEditing ? (
             <div className="space-y-3">
-          <input
-            type="text"
-            value={titleDraft}
-            onChange={(event) => setTitleDraft(event.target.value)}
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-zinc-800 outline-none focus:border-red-700"
-          />
-          <textarea
-            value={bodyDraft}
-            onChange={(event) => setBodyDraft(event.target.value)}
-            className="h-32 w-full rounded-lg border border-zinc-300 px-3 py-2 text-zinc-800 outline-none focus:border-red-700"
-          />
+              <input
+                type="text"
+                value={titleDraft}
+                onChange={(event) => setTitleDraft(event.target.value)}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-zinc-800 outline-none focus:border-red-700"
+              />
+              <textarea
+                value={bodyDraft}
+                onChange={(event) => setBodyDraft(event.target.value)}
+                className="h-32 w-full rounded-lg border border-zinc-300 px-3 py-2 text-zinc-800 outline-none focus:border-red-700"
+              />
               <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleSave}
-              className="rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white hover:bg-red-900"
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTitleDraft(post.title);
-                setBodyDraft(post.body);
-                setIsEditing(false);
-              }}
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
-            >
-              Cancel
-            </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white hover:bg-red-900"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTitleDraft(post.title);
+                    setBodyDraft(post.body);
+                    setIsEditing(false);
+                  }}
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           ) : (
@@ -143,6 +149,17 @@ export default function ModerationPostCard({
               <Trash2 className="h-4 w-4" />
               Delete Post
             </button>
+
+            {post.reportCount > 0 && (
+              <button
+                type="button"
+                onClick={() => onResolveReports(post.id)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+              >
+                <CircleCheck className="h-4 w-4" />
+                Resolve Reports
+              </button>
+            )}
 
             {canModerateAuthor && !isAuthorBanned && (
               <button
