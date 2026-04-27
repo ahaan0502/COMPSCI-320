@@ -148,25 +148,29 @@ function NotesPageContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FeedTab>('hot');
   const [posts, setPosts] = useState<NotePost[]>([]);
+  const [userVotes, setUserVotes] = useState<Record<number, 1 | -1>>({});
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [emptyReason, setEmptyReason] = useState<string | null>(null);
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   const sidebarFilters = SIDEBAR_FILTERS_FROM_COMPONENT;
 
   useEffect(() => {
     const fetchPosts = async () => {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         setError('Not logged in');
         setLoading(false);
         return;
       }
+
+      setCurrentUserId(session.user.id);
 
       const { data: enrolledData, error: enrolledError } = await supabase
         .from('Student_Enrolled_Courses')
@@ -277,11 +281,97 @@ function NotesPageContent() {
 
       setPosts(mapped);
       setEmptyReason(mapped.length === 0 ? 'No notes have been posted for these classes yet.' : null);
+
+      // Fetch this user's existing votes for all loaded posts
+      const postIds = mapped.map((p) => p.id);
+      if (postIds.length > 0) {
+        const { data: votesData, error: votesError } = await supabase
+          .from('Post_Votes')
+          .select('post_id, value')
+          .eq('user_id', session.user.id)
+          .in('post_id', postIds);
+
+        if (!votesError && votesData) {
+          const votesMap: Record<number, 1 | -1> = {};
+          for (const row of votesData as { post_id: number; value: 1 | -1 }[]) {
+            votesMap[row.post_id] = row.value;
+          }
+          setUserVotes(votesMap);
+        }
+      }
+
       setLoading(false);
     };
 
-    fetchPosts();   
+    fetchPosts();
   }, [selectedClassId]);
+
+  const handleVote = async (postId: number, value: 1 | -1) => {
+    const existingVote = userVotes[postId] ?? null;
+
+    // Optimistically update UI
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id !== postId) return p;
+
+        let delta = 0;
+        if (existingVote === value) {
+          // Clicking same direction = undo vote
+          delta = -value;
+        } else if (existingVote !== null) {
+          // Switching direction: ±2
+          delta = value * 2;
+        } else {
+          // Fresh vote
+          delta = value;
+        }
+
+        return { ...p, votes: p.votes + delta };
+      })
+    );
+
+    setUserVotes((prev) => {
+      if (prev[postId] === value) {
+        // Undo vote
+        const next = { ...prev };
+        delete next[postId];
+        return next;
+      }
+      return { ...prev, [postId]: value };
+    });
+
+    // Persist to Supabase
+    try {
+      if (existingVote === value) {
+        // Remove vote
+        await supabase
+          .from('Post_Votes')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('post_id', postId);
+
+        await supabase.rpc('increment_votes', { post_id: postId, delta: -value });
+      } else if (existingVote !== null) {
+        // Switch direction
+        await supabase
+          .from('Post_Votes')
+          .update({ value })
+          .eq('user_id', currentUserId)
+          .eq('post_id', postId);
+
+        await supabase.rpc('increment_votes', { post_id: postId, delta: value * 2 });
+      } else {
+        // New vote
+        await supabase
+          .from('Post_Votes')
+          .insert({ user_id: currentUserId, post_id: postId, value });
+
+        await supabase.rpc('increment_votes', { post_id: postId, delta: value });
+      }
+    } catch (err) {
+      console.error('Vote error:', err);
+    }
+  };
 
   const filteredPosts = useMemo(
     () => sortPosts(applyFeedFilters(posts, searchQuery, sidebarFilters), activeTab),
@@ -342,7 +432,13 @@ function NotesPageContent() {
 
           <div className="space-y-4">
             {filteredPosts.map((post) => (
-              <NoteCard key={post.id} post={post} />
+              <NoteCard
+                key={post.id}
+                post={post}
+                currentUserId={currentUserId}
+                userVote={userVotes[post.id] ?? null}
+                onVote={handleVote}
+              />
             ))}
           </div>
 

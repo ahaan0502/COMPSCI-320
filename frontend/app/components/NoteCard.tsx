@@ -37,6 +37,9 @@ export interface NotePost {
 
 interface NoteCardProps {
   post: NotePost;
+  currentUserId: string;
+  userVote: 1 | -1 | null;
+  onVote: (postId: number, value: 1 | -1) => Promise<void>;
 }
 
 function formatRelativeTime(timestamp: string): string {
@@ -59,7 +62,7 @@ function formatRelativeTime(timestamp: string): string {
   return `${days}d ago`;
 }
 
-export default function NoteCard({ post }: NoteCardProps) {
+export default function NoteCard({ post, userVote, onVote }: NoteCardProps) {
   const reportQuery = new URLSearchParams({
     postId: String(post.id),
     postTitle: post.title,
@@ -84,16 +87,24 @@ export default function NoteCard({ post }: NoteCardProps) {
         <div className="hidden min-w-10 flex-col items-center text-zinc-400 sm:flex">
           <button
             type="button"
-            className="rounded p-1 transition hover:bg-zinc-100 hover:text-zinc-700"
+            onClick={() => onVote(post.id, 1)}
+            className={`rounded p-1 transition hover:bg-zinc-100 ${
+              userVote === 1 ? "text-orange-500" : "hover:text-zinc-700"
+            }`}
             aria-label="Upvote"
+            aria-pressed={userVote === 1}
           >
             <ArrowUp className="h-4 w-4" />
           </button>
           <span className="my-1 text-lg font-semibold text-orange-500">{post.votes}</span>
           <button
             type="button"
-            className="rounded p-1 transition hover:bg-zinc-100 hover:text-zinc-700"
+            onClick={() => onVote(post.id, -1)}
+            className={`rounded p-1 transition hover:bg-zinc-100 ${
+              userVote === -1 ? "text-blue-500" : "hover:text-zinc-700"
+            }`}
             aria-label="Downvote"
+            aria-pressed={userVote === -1}
           >
             <ArrowDown className="h-4 w-4" />
           </button>
