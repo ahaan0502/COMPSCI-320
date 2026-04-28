@@ -64,7 +64,7 @@ const features = [
 ];
 
 function HomeContent() {
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode] = useState(false);
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
 

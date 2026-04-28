@@ -154,9 +154,13 @@ function NotesPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [emptyReason, setEmptyReason] = useState<string | null>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabase = useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ),
+    [],
   );
 
   const sidebarFilters = SIDEBAR_FILTERS_FROM_COMPONENT;
@@ -304,7 +308,7 @@ function NotesPageContent() {
     };
 
     fetchPosts();
-  }, [selectedClassId]);
+  }, [selectedClassId, supabase]);
 
   const handleVote = async (postId: number, value: 1 | -1) => {
     const existingVote = userVotes[postId] ?? null;
