@@ -600,7 +600,7 @@ export default function ProfilePage() {
               <p className="text-sm font-medium text-gray-500">{profile.email}</p>
               {profile.major && <p className="mt-2 text-sm text-gray-500">{profile.major}</p>}
               <p className="mt-3 text-sm text-gray-400">
-                {uploading ? 'Uploading profile picture...' : 'Profile picture changes save automatically.'}
+                {uploading ? 'Uploading profile picture...' : ''}
               </p>
 
               <div className="mt-5">
