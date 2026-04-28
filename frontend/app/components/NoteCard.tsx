@@ -68,6 +68,8 @@ interface CommentItem {
   authorEmail: string;
 }
 
+type ShareState = "idle" | "copied" | "error";
+
 function formatRelativeTime(timestamp: string): string {
   const deltaMs = Date.now() - new Date(timestamp).getTime();
   const minutes = Math.floor(deltaMs / (1000 * 60));
@@ -106,6 +108,7 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
   const [commentsLoaded, setCommentsLoaded] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [shareState, setShareState] = useState<ShareState>("idle");
 
   const reportQuery = new URLSearchParams({
     postId: String(post.id),
@@ -136,6 +139,18 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
 
     void loadSession();
   }, [supabase]);
+
+  useEffect(() => {
+    if (shareState === "idle") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShareState("idle");
+    }, 2200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [shareState]);
 
   const loadComments = async () => {
     setCommentsLoading(true);
@@ -260,8 +275,44 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
     setIsSubmittingComment(false);
   };
 
+  const handleShare = async () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const shareUrl = new URL(window.location.href);
+    shareUrl.hash = `post-${post.id}`;
+
+    const shareData = {
+      title: post.title,
+      text: `${post.title} · ${post.course_label}`,
+      url: shareUrl.toString(),
+    };
+
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share(shareData);
+        setShareState("copied");
+        return;
+      }
+
+      await navigator.clipboard.writeText(shareData.url);
+      setShareState("copied");
+    } catch {
+      try {
+        await navigator.clipboard.writeText(shareData.url);
+        setShareState("copied");
+      } catch {
+        setShareState("error");
+      }
+    }
+  };
+
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5">
+    <article
+      id={`post-${post.id}`}
+      className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
+    >
       <div className="flex gap-4">
         <div className="hidden min-w-10 flex-col items-center text-zinc-400 sm:flex">
           <button
@@ -345,10 +396,11 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
             </button>
             <button
               type="button"
+              onClick={() => void handleShare()}
               className="inline-flex items-center gap-1.5 font-medium transition hover:text-zinc-900"
             >
               <Share2 className="h-4 w-4" />
-              <span>Share</span>
+              <span>{shareState === "copied" ? "Link Copied" : "Share"}</span>
             </button>
             <button
               type="button"
@@ -365,6 +417,10 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
               <span>Report</span>
             </Link>
           </div>
+
+          {shareState === "error" && (
+            <p className="mt-3 text-sm text-red-600">Unable to share this post right now.</p>
+          )}
 
           {isCommentsOpen && (
             <section className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
