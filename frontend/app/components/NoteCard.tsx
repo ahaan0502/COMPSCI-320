@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Paperclip,
   ArrowDown,
@@ -7,7 +9,9 @@ import {
   Pencil,
   Share2,
 } from "lucide-react";
+import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
 export type PostVisibility = "public" | "private";
 
@@ -42,6 +46,28 @@ interface NoteCardProps {
   onVote?: (postId: number, value: 1 | -1) => Promise<void>;
 }
 
+interface CommentRow {
+  id: number;
+  body: string;
+  created_at: string;
+  author_id: string;
+}
+
+interface CommentAuthorRow {
+  author_id: string;
+  name: string | null;
+  email: string | null;
+}
+
+interface CommentItem {
+  id: number;
+  body: string;
+  createdAt: string;
+  authorId: string;
+  authorName: string;
+  authorEmail: string;
+}
+
 function formatRelativeTime(timestamp: string): string {
   const deltaMs = Date.now() - new Date(timestamp).getTime();
   const minutes = Math.floor(deltaMs / (1000 * 60));
@@ -63,6 +89,24 @@ function formatRelativeTime(timestamp: string): string {
 }
 
 export default function NoteCard({ post, userVote = null, onVote }: NoteCardProps) {
+  const supabase = useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      ),
+    [],
+  );
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [comments, setComments] = useState<CommentItem[]>([]);
+  const [commentCount, setCommentCount] = useState(post.comments_count);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [currentSessionUserId, setCurrentSessionUserId] = useState<string | null>(null);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsLoaded, setCommentsLoaded] = useState(false);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
   const reportQuery = new URLSearchParams({
     postId: String(post.id),
     postTitle: post.title,
@@ -80,6 +124,141 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
   const attachmentName = post.attachment_url
     ? decodeURIComponent(post.attachment_url.split("/").pop()?.split("?")[0] || "attachment")
     : null;
+
+  useEffect(() => {
+    const loadSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      setCurrentSessionUserId(session?.user?.id ?? null);
+    };
+
+    void loadSession();
+  }, [supabase]);
+
+  const loadComments = async () => {
+    setCommentsLoading(true);
+    setCommentsError(null);
+
+    const { data, error } = await supabase
+      .from("Comments")
+      .select("id, body, created_at, author_id")
+      .eq("post_id", post.id)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      setCommentsError("Failed to load comments.");
+      setCommentsLoading(false);
+      return;
+    }
+
+    const authorIds = Array.from(
+      new Set(
+        ((data || []) as CommentRow[])
+          .map((comment) => comment.author_id)
+          .filter((authorId): authorId is string => Boolean(authorId)),
+      ),
+    );
+
+    const authorsById = new Map<string, CommentAuthorRow>();
+
+    if (authorIds.length > 0) {
+      const { data: authorRows, error: authorsError } = await supabase
+        .from("Users")
+        .select("author_id, name, email")
+        .in("author_id", authorIds);
+
+      if (!authorsError) {
+        for (const author of (authorRows || []) as CommentAuthorRow[]) {
+          authorsById.set(author.author_id, author);
+        }
+      }
+    }
+
+    const mappedComments = ((data || []) as CommentRow[]).map((comment) => {
+      const user = authorsById.get(comment.author_id);
+
+      return {
+        id: comment.id,
+        body: comment.body,
+        createdAt: comment.created_at,
+        authorId: comment.author_id,
+        authorName: user?.name ?? "Unknown",
+        authorEmail: user?.email ?? "",
+      };
+    });
+
+    setComments(mappedComments);
+    setCommentCount(mappedComments.length);
+    setCommentsLoaded(true);
+    setCommentsLoading(false);
+  };
+
+  const handleToggleComments = async () => {
+    const nextIsOpen = !isCommentsOpen;
+    setIsCommentsOpen(nextIsOpen);
+
+    if (nextIsOpen && !commentsLoaded) {
+      await loadComments();
+    }
+  };
+
+  const handleSubmitComment = async () => {
+    const body = commentDraft.trim();
+    if (!body) {
+      return;
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.user) {
+      setCommentsError("Please sign in before commenting.");
+      return;
+    }
+
+    setIsSubmittingComment(true);
+    setCommentsError(null);
+
+    const { error } = await supabase.from("Comments").insert({
+      post_id: post.id,
+      author_id: session.user.id,
+      body,
+    });
+
+    if (error) {
+      setCommentsError(error.message || "Failed to post comment.");
+      setIsSubmittingComment(false);
+      return;
+    }
+
+    const authorName =
+      session.user.user_metadata?.full_name ||
+      session.user.user_metadata?.name ||
+      session.user.email?.split("@")[0] ||
+      "You";
+
+    const authorEmail = session.user.email ?? "";
+
+    setComments((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        body,
+        createdAt: new Date().toISOString(),
+        authorId: session.user.id,
+        authorName,
+        authorEmail,
+      },
+    ]);
+    setCommentCount((prev) => prev + 1);
+    setCommentDraft("");
+    setCommentsLoaded(true);
+    setCurrentSessionUserId(session.user.id);
+    setIsSubmittingComment(false);
+  };
 
   return (
     <article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5">
@@ -157,10 +336,12 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
           <div className="flex flex-wrap items-center gap-4 text-zinc-600">
             <button
               type="button"
+              onClick={() => void handleToggleComments()}
               className="inline-flex items-center gap-1.5 font-medium transition hover:text-zinc-900"
+              aria-expanded={isCommentsOpen}
             >
               <MessageSquare className="h-4 w-4" />
-              <span>{post.comments_count} Comments</span>
+              <span>{commentCount} Comments</span>
             </button>
             <button
               type="button"
@@ -184,6 +365,88 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
               <span>Report</span>
             </Link>
           </div>
+
+          {isCommentsOpen && (
+            <section className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-zinc-500">
+                  Discussion
+                </h3>
+                <span className="text-xs font-medium text-zinc-400">{commentCount} total</span>
+              </div>
+
+              <div className="space-y-3">
+                {commentsLoading && (
+                  <p className="text-sm text-zinc-500">Loading comments...</p>
+                )}
+
+                {!commentsLoading &&
+                  comments.map((comment) => {
+                    const commenterLabel =
+                      comment.authorName || comment.authorEmail || "Unknown";
+
+                    return (
+                      <article
+                        key={comment.id}
+                        className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm"
+                      >
+                        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                          <Link
+                            href={`/profile/${comment.authorId}`}
+                            className="font-semibold text-zinc-800 underline-offset-4 transition hover:text-zinc-950 hover:underline"
+                          >
+                            {commenterLabel}
+                          </Link>
+                          {currentSessionUserId === comment.authorId && (
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                              You
+                            </span>
+                          )}
+                          <span className="text-zinc-400">·</span>
+                          <span className="text-zinc-500">
+                            {formatRelativeTime(comment.createdAt)}
+                          </span>
+                        </div>
+                        <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-700">
+                          {comment.body}
+                        </p>
+                      </article>
+                    );
+                  })}
+              </div>
+
+              <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm">
+                <label htmlFor={`comment-${post.id}`} className="mb-2 block text-sm font-semibold text-zinc-700">
+                  Add a comment
+                </label>
+                <textarea
+                  id={`comment-${post.id}`}
+                  value={commentDraft}
+                  onChange={(event) => setCommentDraft(event.target.value)}
+                  placeholder="Share a helpful clarification, answer, or follow-up."
+                  rows={3}
+                  className="w-full resize-none rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-red-700 focus:bg-white"
+                />
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <p className="text-xs text-zinc-400">
+                    Commenters can be viewed from their profile.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void handleSubmitComment()}
+                    disabled={isSubmittingComment || commentDraft.trim().length === 0}
+                    className="rounded-full bg-[#7A1F1F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#5e1717] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSubmittingComment ? "Posting..." : "Post Comment"}
+                  </button>
+                </div>
+              </div>
+
+              {commentsError && (
+                <p className="mt-3 text-sm text-red-600">{commentsError}</p>
+              )}
+            </section>
+          )}
         </div>
       </div>
     </article>

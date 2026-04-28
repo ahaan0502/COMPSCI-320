@@ -159,6 +159,25 @@ export default function AuthorProfilePage() {
         return;
       }
 
+      const postIds = ((postsData || []) as SupabasePostRow[]).map((post) => post.post_id);
+      const commentsCountByPost = new Map<number, number>();
+
+      if (postIds.length > 0) {
+        const { data: commentsData, error: commentsError } = await client
+          .from('Comments')
+          .select('post_id')
+          .in('post_id', postIds);
+
+        if (commentsError) {
+          console.error('Failed to load author comment counts:', commentsError);
+        } else {
+          for (const row of (commentsData || []) as { post_id: number | null }[]) {
+            if (typeof row.post_id !== 'number') continue;
+            commentsCountByPost.set(row.post_id, (commentsCountByPost.get(row.post_id) ?? 0) + 1);
+          }
+        }
+      }
+
       const mappedPosts: NotePost[] = ((postsData || []) as SupabasePostRow[]).map((post) => {
         const user = firstRelation(post.Users);
         const course = firstRelation(post.Courses);
@@ -185,7 +204,7 @@ export default function AuthorProfilePage() {
           author_email: user?.email ?? profileRow.email,
           course_label: `${course?.course_number ?? ''}${course?.title ? ` - ${course.title}` : ''}`.trim(),
           semester_label: `${semester?.term ?? ''} ${semester?.year ?? ''}`.trim(),
-          comments_count: 0,
+          comments_count: commentsCountByPost.get(post.post_id) ?? 0,
         };
       });
 

@@ -282,18 +282,20 @@ function NotesPageContent() {
           comments_count: 0,
         };
       });
-
-      setPosts(mapped);
-      setEmptyReason(mapped.length === 0 ? 'No notes have been posted for these classes yet.' : null);
-
-      // Fetch this user's existing votes for all loaded posts
       const postIds = mapped.map((p) => p.id);
+
       if (postIds.length > 0) {
-        const { data: votesData, error: votesError } = await supabase
-          .from('Post_Votes')
-          .select('post_id, value')
-          .eq('user_id', session.user.id)
-          .in('post_id', postIds);
+        const [
+          { data: votesData, error: votesError },
+          { data: commentsData, error: commentsError },
+        ] = await Promise.all([
+          supabase
+            .from('Post_Votes')
+            .select('post_id, value')
+            .eq('user_id', session.user.id)
+            .in('post_id', postIds),
+          supabase.from('Comments').select('post_id').in('post_id', postIds),
+        ]);
 
         if (!votesError && votesData) {
           const votesMap: Record<number, 1 | -1> = {};
@@ -302,7 +304,23 @@ function NotesPageContent() {
           }
           setUserVotes(votesMap);
         }
+
+        if (!commentsError && commentsData) {
+          const commentsCountByPost = new Map<number, number>();
+
+          for (const row of commentsData as { post_id: number | null }[]) {
+            if (typeof row.post_id !== 'number') continue;
+            commentsCountByPost.set(row.post_id, (commentsCountByPost.get(row.post_id) ?? 0) + 1);
+          }
+
+          for (const post of mapped) {
+            post.comments_count = commentsCountByPost.get(post.id) ?? 0;
+          }
+        }
       }
+
+      setPosts(mapped);
+      setEmptyReason(mapped.length === 0 ? 'No notes have been posted for these classes yet.' : null);
 
       setLoading(false);
     };
