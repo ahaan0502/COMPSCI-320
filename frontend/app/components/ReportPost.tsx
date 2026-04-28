@@ -17,6 +17,7 @@ export default function ReportPost() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [details, setDetails] = useState("");
+  const [customOtherReason, setCustomOtherReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,7 +74,7 @@ export default function ReportPost() {
         postId: numericPostId,
         reporterId: session.user.id,
         reason: selectedReason,
-        details,
+        details: selectedReason === "other" && customOtherReason ? `${customOtherReason}\n${details}`.trim() : details,
       });
 
       router.push("/notes?reported=1");
@@ -85,7 +86,7 @@ export default function ReportPost() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex h-screen w-full items-center justify-center bg-zinc-100/90 px-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-start overflow-y-auto bg-zinc-100/90 px-4 py-8 backdrop-blur-sm">
       <div className="relative w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl">
         <button
           type="button"
@@ -171,6 +172,22 @@ export default function ReportPost() {
               </label>
             ))}
           </fieldset>
+
+          {selectedReason === "other" && (
+            <div>
+              <label htmlFor="other-reason" className="block text-sm font-semibold uppercase tracking-wide text-zinc-500">
+                Please describe the issue
+              </label>
+              <input
+                id="other-reason"
+                type="text"
+                value={customOtherReason}
+                onChange={(event) => setCustomOtherReason(event.target.value)}
+                placeholder="What's wrong with this post?"
+                className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-zinc-800 outline-none focus:border-red-700"
+              />
+            </div>
+          )}
 
           <div>
             <label htmlFor="report-details" className="block text-sm font-semibold uppercase tracking-wide text-zinc-500">
