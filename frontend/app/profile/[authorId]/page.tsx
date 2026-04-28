@@ -150,6 +150,7 @@ export default function AuthorProfilePage() {
         `)
         .eq('author_id', authorId)
         .eq('is_report', false)
+        .eq('visibility', 'public')
         .order('created_at', { ascending: false });
 
       if (postsError) {

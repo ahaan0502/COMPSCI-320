@@ -244,7 +244,8 @@ function NotesPageContent() {
           )
         `)
         .in('course_id', enrolledCourseIds)
-        .eq('is_report', false);
+        .eq('is_report', false)
+        .eq('visibility', 'public');
 
       if (postsError) {
         console.error('Posts error:', postsError);
