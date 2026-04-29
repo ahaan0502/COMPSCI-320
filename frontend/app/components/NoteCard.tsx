@@ -12,6 +12,7 @@ import {
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { isUserBannedFromCourse } from "../lib/moderation";
 
 export type PostVisibility = "public" | "private";
 
@@ -231,6 +232,11 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
 
     if (!session?.user) {
       setCommentsError("Please sign in before commenting.");
+      return;
+    }
+
+    if (post.course_id !== null && (await isUserBannedFromCourse(post.course_id, session.user.id))) {
+      setCommentsError("You are banned from commenting in this class.");
       return;
     }
 
