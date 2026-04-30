@@ -43,6 +43,7 @@ function SidebarClasses() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeClassId = searchParams.get("classId");
+  const activeSemesterId = searchParams.get("semesterId");
 
   const [classes, setClasses] = useState<
     {
@@ -184,12 +185,12 @@ function SidebarClasses() {
           All classes
         </button>
         {classes.map((c) => {
-          const isActive = String(c.courseId) === activeClassId;
+          const isActive = String(c.courseId) === activeClassId && String(c.semesterId) === activeSemesterId;
           return (
             <button
               key={`${c.courseId}-${c.semesterId}`}
               type="button"
-              onClick={() => router.push(`/notes?classId=${c.courseId}`)}
+              onClick={() => router.push(`/notes?classId=${c.courseId}&semesterId=${c.semesterId}`)}
               className={`w-full rounded-md px-3 py-2 text-left text-sm ${
                 isActive ? "bg-zinc-100 font-semibold" : "hover:bg-zinc-50"
               }`}
@@ -316,6 +317,7 @@ function sortPosts(posts: NotePost[], tab: FeedTab): NotePost[] {
 function NotesPageContent() {
   const searchParams = useSearchParams();
   const selectedClassId = searchParams.get("classId");
+  const selectedSemesterId = searchParams.get("semesterId");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<FeedTab>("hot");
   const [posts, setPosts] = useState<NotePost[]>([]);
@@ -352,7 +354,7 @@ function NotesPageContent() {
 
       const { data: enrolledData, error: enrolledError } = await supabase
         .from("Student_Enrolled_Courses")
-        .select("course_id")
+        .select("course_id, semester_id")
         .eq("author_id", session.user.id);
 
       if (enrolledError) {
@@ -362,13 +364,18 @@ function NotesPageContent() {
         return;
       }
 
-      let enrolledCourseIds = (enrolledData || []).map((row: { course_id: number }) => row.course_id);
+      let enrolledOfferings = (enrolledData || []) as { course_id: number; semester_id: number }[];
 
       if (selectedClassId) {
         const classId = Number(selectedClassId);
-        enrolledCourseIds = enrolledCourseIds.filter((courseId) => courseId === classId);
+        const semesterId = selectedSemesterId ? Number(selectedSemesterId) : null;
 
-        if (enrolledCourseIds.length === 0) {
+        enrolledOfferings = enrolledOfferings.filter((offering) => {
+          if (offering.course_id !== classId) return false;
+          return semesterId === null || offering.semester_id === semesterId;
+        });
+
+        if (enrolledOfferings.length === 0) {
           setEmptyReason("That class is not in My Classes.");
           setPosts([]);
           setLoading(false);
@@ -376,12 +383,18 @@ function NotesPageContent() {
         }
       }
 
-      if (enrolledCourseIds.length === 0) {
+      if (enrolledOfferings.length === 0) {
         setEmptyReason("Add a class before browsing notes.");
         setPosts([]);
         setLoading(false);
         return;
       }
+
+      const enrolledOfferingKeys = new Set(
+        enrolledOfferings.map((offering) => `${offering.course_id}:${offering.semester_id}`),
+      );
+      const enrolledCourseIds = Array.from(new Set(enrolledOfferings.map((offering) => offering.course_id)));
+      const enrolledSemesterIds = Array.from(new Set(enrolledOfferings.map((offering) => offering.semester_id)));
 
       const { data: postsData, error: postsError } = await supabase
         .from("Posts")
@@ -420,6 +433,7 @@ function NotesPageContent() {
         `,
         )
         .in("course_id", enrolledCourseIds)
+        .in("semester_id", enrolledSemesterIds)
         .eq("is_report", false);
 
       if (postsError) {
@@ -429,35 +443,40 @@ function NotesPageContent() {
         return;
       }
 
-      const mapped: NotePost[] = ((postsData || []) as SupabasePostRow[]).map((post) => {
-        const user = Array.isArray(post.Users) ? post.Users[0] : post.Users;
-        const course = Array.isArray(post.Courses) ? post.Courses[0] : post.Courses;
-        const semester = Array.isArray(post.Semesters) ? post.Semesters[0] : post.Semesters;
+      const mapped: NotePost[] = ((postsData || []) as SupabasePostRow[])
+        .filter((post) => {
+          if (typeof post.course_id !== "number" || typeof post.semester_id !== "number") return false;
+          return enrolledOfferingKeys.has(`${post.course_id}:${post.semester_id}`);
+        })
+        .map((post) => {
+          const user = Array.isArray(post.Users) ? post.Users[0] : post.Users;
+          const course = Array.isArray(post.Courses) ? post.Courses[0] : post.Courses;
+          const semester = Array.isArray(post.Semesters) ? post.Semesters[0] : post.Semesters;
 
-        return {
-          id: post.post_id,
-          created_at: post.created_at,
-          author_id: post.author_id,
-          title: post.title ?? "",
-          body: post.body ?? "",
-          purpose: post.purpose,
-          visibility: post.visibility as PostVisibility,
-          group_id: post.group_id,
-          tags: post.tags,
-          votes: post.votes ?? 0,
-          updated_at: post.updated_at,
-          is_deleted: false,
-          course_id: post.course_id,
-          semester_id: post.semester_id,
-          is_report: post.is_report ?? false,
-          attachment_url: post.attachment_url,
-          author_name: user?.name ?? "Unknown",
-          author_email: user?.email ?? "",
-          course_label: `${course?.course_number ?? ""} - ${course?.title ?? ""}`,
-          semester_label: `${semester?.term ?? ""} ${semester?.year ?? ""}`,
-          comments_count: 0,
-        };
-      });
+          return {
+            id: post.post_id,
+            created_at: post.created_at,
+            author_id: post.author_id,
+            title: post.title ?? "",
+            body: post.body ?? "",
+            purpose: post.purpose,
+            visibility: post.visibility as PostVisibility,
+            group_id: post.group_id,
+            tags: post.tags,
+            votes: post.votes ?? 0,
+            updated_at: post.updated_at,
+            is_deleted: false,
+            course_id: post.course_id,
+            semester_id: post.semester_id,
+            is_report: post.is_report ?? false,
+            attachment_url: post.attachment_url,
+            author_name: user?.name ?? "Unknown",
+            author_email: user?.email ?? "",
+            course_label: `${course?.course_number ?? ""} - ${course?.title ?? ""}`,
+            semester_label: `${semester?.term ?? ""} ${semester?.year ?? ""}`,
+            comments_count: 0,
+          };
+        });
       const postIds = mapped.map((p) => p.id);
 
       if (postIds.length > 0) {
@@ -501,7 +520,7 @@ function NotesPageContent() {
     };
 
     void fetchPosts();
-  }, [selectedClassId, supabase]);
+  }, [selectedClassId, selectedSemesterId, supabase]);
 
   const handleVote = async (postId: number, value: 1 | -1) => {
     const existingVote = userVotes[postId] ?? null;

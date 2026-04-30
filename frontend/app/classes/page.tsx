@@ -39,7 +39,7 @@ interface ClassData {
 }
 
 interface ClassesViewProps {
-  onClassSelect: (classId: number) => void;
+  onClassSelect: (courseId: number, semesterId: number) => void;
 }
 
 interface CourseRecord {
@@ -181,17 +181,19 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
           return null;
         }
 
-        // Count notes for this course
+        // Counts are scoped to the course offering, not just the course catalog entry.
         const { count: noteCount } = await supabase
           .from('Posts')
           .select('*', { count: 'exact', head: true })
-          .eq('course_id', course.course_id);
+          .eq('course_id', course.course_id)
+          .eq('semester_id', semester.semester_id)
+          .eq('is_report', false);
 
-        // Count enrolled students for this course
         const { count: memberCount } = await supabase
           .from('Student_Enrolled_Courses')
           .select('*', { count: 'exact', head: true })
-          .eq('course_id', course.course_id);
+          .eq('course_id', course.course_id)
+          .eq('semester_id', semester.semester_id);
 
         return {
           courseId: course.course_id,
@@ -302,7 +304,7 @@ export function ClassesView({ onClassSelect }: ClassesViewProps) {
         {enrolledClasses.map((course) => (
           <div
             key={`${course.courseId}-${course.semesterId}`}
-            onClick={() => onClassSelect(course.courseId)}
+            onClick={() => onClassSelect(course.courseId, course.semesterId)}
             className="group cursor-pointer bg-white border border-gray-200 rounded-xl p-6 transition-all hover:shadow-lg hover:border-[#7A1F1F]"
           >
             <div className="flex justify-between items-start mb-4">
@@ -370,8 +372,8 @@ export default function Page() {
 
   return (
     <ClassesView
-      onClassSelect={(classId) => {
-        router.push(`/notes?classId=${classId}`);
+      onClassSelect={(classId, semesterId) => {
+        router.push(`/notes?classId=${classId}&semesterId=${semesterId}`);
       }}
     />
   );
