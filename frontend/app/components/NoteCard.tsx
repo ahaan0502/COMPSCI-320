@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 export type PostVisibility = "public" | "private";
 
@@ -91,6 +92,7 @@ function formatRelativeTime(timestamp: string): string {
 }
 
 export default function NoteCard({ post, userVote = null, onVote }: NoteCardProps) {
+  const router = useRouter();
   const supabase = useMemo(
     () =>
       createBrowserClient(
@@ -127,6 +129,31 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
   const attachmentName = post.attachment_url
     ? decodeURIComponent(post.attachment_url.split("/").pop()?.split("?")[0] || "attachment")
     : null;
+  const postHref = `/notes/${post.id}`;
+
+  const handleCardClick = (event: MouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+
+    if (target.closest("button,a,input,textarea,select,label")) {
+      return;
+    }
+
+    router.push(postHref);
+  };
+
+  const handleCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    const target = event.target as HTMLElement;
+    if (target.closest("button,a,input,textarea,select,label")) {
+      return;
+    }
+
+    event.preventDefault();
+    router.push(postHref);
+  };
 
   useEffect(() => {
     const loadSession = async () => {
@@ -311,7 +338,11 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
   return (
     <article
       id={`post-${post.id}`}
-      className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
+      role="link"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      className="cursor-pointer rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
     >
       <div className="flex gap-4">
         <div className="hidden min-w-10 flex-col items-center text-zinc-400 sm:flex">
