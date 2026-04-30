@@ -14,7 +14,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
-import { isUserBannedFromCourse } from "../lib/moderation";
+import { deleteModerationComment, isUserBannedFromCourse } from "../lib/moderation";
 
 export type PostVisibility = "public" | "private";
 
@@ -122,6 +122,7 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
   const [editedBody, setEditedBody] = useState(post.body);
   const [editError, setEditError] = useState<string | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
 
   const reportQuery = new URLSearchParams({
     postId: String(post.id),
@@ -149,7 +150,21 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
         data: { session },
       } = await supabase.auth.getSession();
 
-      setCurrentSessionUserId(session?.user?.id ?? null);
+      const userId = session?.user?.id ?? null;
+      setCurrentSessionUserId(userId);
+
+      if (!userId) {
+        setIsCurrentUserAdmin(false);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("Users")
+        .select("is_admin")
+        .eq("author_id", userId)
+        .maybeSingle();
+
+      setIsCurrentUserAdmin(profile?.is_admin === true);
     };
 
     void loadSession();
@@ -464,6 +479,20 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
     }
   };
 
+  const handleDeleteComment = async (commentId: number) => {
+    if (!isCurrentUserAdmin) {
+      return;
+    }
+
+    try {
+      await deleteModerationComment(commentId);
+      setComments((prev) => prev.filter((comment) => comment.id !== commentId));
+      setCommentCount((prev) => Math.max(prev - 1, 0));
+    } catch (error) {
+      setCommentsError(error instanceof Error ? error.message : "Failed to delete comment.");
+    }
+  };
+
   return (
     <article
       id={`post-${post.id}`}
@@ -671,22 +700,33 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
                         key={comment.id}
                         className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm"
                       >
-                        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                          <Link
-                            href={`/profile/${comment.authorId}`}
-                            className="font-semibold text-zinc-800 underline-offset-4 transition hover:text-zinc-950 hover:underline"
-                          >
-                            {commenterLabel}
-                          </Link>
-                          {currentSessionUserId === comment.authorId && (
-                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
-                              You
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <Link
+                              href={`/profile/${comment.authorId}`}
+                              className="font-semibold text-zinc-800 underline-offset-4 transition hover:text-zinc-950 hover:underline"
+                            >
+                              {commenterLabel}
+                            </Link>
+                            {currentSessionUserId === comment.authorId && (
+                              <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                                You
+                              </span>
+                            )}
+                            <span className="text-zinc-400">·</span>
+                            <span className="text-zinc-500">
+                              {formatRelativeTime(comment.createdAt)}
                             </span>
+                          </div>
+                          {isCurrentUserAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteComment(comment.id)}
+                              className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                            >
+                              Delete
+                            </button>
                           )}
-                          <span className="text-zinc-400">·</span>
-                          <span className="text-zinc-500">
-                            {formatRelativeTime(comment.createdAt)}
-                          </span>
                         </div>
                         <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-700">
                           {comment.body}

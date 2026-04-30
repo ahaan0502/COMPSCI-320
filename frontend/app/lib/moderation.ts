@@ -418,6 +418,15 @@ export async function deleteModerationPost(postId: number) {
   }
 }
 
+export async function deleteModerationComment(commentId: number) {
+  const client = getClient();
+  const { error } = await client.from('Comments').delete().eq('id', commentId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function banUserFromCourse(courseId: number, userId: string, adminId: string) {
   const client = getClient();
   const { error } = await client.from('Course_Bans').upsert(

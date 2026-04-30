@@ -14,7 +14,7 @@ import {
   Share2,
 } from 'lucide-react';
 import { type NotePost, type PostVisibility } from '../../components/NoteCard';
-import { isUserBannedFromCourse } from '../../lib/moderation';
+import { deleteModerationComment, isUserBannedFromCourse } from '../../lib/moderation';
 
 interface SupabasePostRow {
   post_id: number;
@@ -125,6 +125,7 @@ export default function PostDetailPage() {
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [shareState, setShareState] = useState<ShareState>('idle');
+  const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
 
   useEffect(() => {
     const loadPost = async () => {
@@ -138,7 +139,20 @@ export default function PostDetailPage() {
         data: { session },
       } = await client.auth.getSession();
 
-      setCurrentUserId(session?.user?.id ?? '');
+      const userId = session?.user?.id ?? '';
+      setCurrentUserId(userId);
+
+      if (userId) {
+        const { data: profile } = await client
+          .from('Users')
+          .select('is_admin')
+          .eq('author_id', userId)
+          .maybeSingle();
+
+        setIsCurrentUserAdmin(profile?.is_admin === true);
+      } else {
+        setIsCurrentUserAdmin(false);
+      }
 
       const { data: postData, error: postError } = await client
         .from('Posts')
@@ -389,6 +403,18 @@ export default function PostDetailPage() {
     setIsSubmittingComment(false);
   };
 
+  const handleDeleteComment = async (commentId: number) => {
+    if (!isCurrentUserAdmin) return;
+
+    try {
+      await deleteModerationComment(commentId);
+      setComments((prev) => prev.filter((comment) => comment.id !== commentId));
+      setCommentCount((prev) => Math.max(prev - 1, 0));
+    } catch (deleteError) {
+      setCommentsError(deleteError instanceof Error ? deleteError.message : 'Failed to delete comment.');
+    }
+  };
+
   const handleAttachmentOpen = async (url: string) => {
     window.open(url, '_blank', 'noreferrer');
   };
@@ -598,20 +624,31 @@ export default function PostDetailPage() {
 
                 return (
                   <article key={comment.id} className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 shadow-sm">
-                    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                      <Link
-                        href={`/profile/${comment.authorId}`}
-                        className="font-semibold text-zinc-800 underline-offset-4 transition hover:text-zinc-950 hover:underline"
-                      >
-                        {commenterLabel}
-                      </Link>
-                      {currentUserId === comment.authorId && (
-                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
-                          You
-                        </span>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <Link
+                          href={`/profile/${comment.authorId}`}
+                          className="font-semibold text-zinc-800 underline-offset-4 transition hover:text-zinc-950 hover:underline"
+                        >
+                          {commenterLabel}
+                        </Link>
+                        {currentUserId === comment.authorId && (
+                          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                            You
+                          </span>
+                        )}
+                        <span className="text-zinc-400">·</span>
+                        <span className="text-zinc-500">{formatRelativeTime(comment.createdAt)}</span>
+                      </div>
+                      {isCurrentUserAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteComment(comment.id)}
+                          className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                        >
+                          Delete
+                        </button>
                       )}
-                      <span className="text-zinc-400">·</span>
-                      <span className="text-zinc-500">{formatRelativeTime(comment.createdAt)}</span>
                     </div>
                     <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-700">{comment.body}</p>
                   </article>
