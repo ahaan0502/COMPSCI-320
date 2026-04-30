@@ -4,11 +4,11 @@ import {
   Paperclip,
   ArrowDown,
   ArrowUp,
+  Bookmark,
   Flag,
   MessageSquare,
   Pencil,
   Share2,
-  Star,
 } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
@@ -390,20 +390,6 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange 
       id={`post-${post.id}`}
       className="relative rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
     >
-      <button
-        type="button"
-        onClick={() => void handleSaveToggle()}
-        disabled={saveLoading}
-        className="absolute right-4 top-4 rounded-full p-2 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-        aria-label={isSaved ? "Unsave note" : "Save note"}
-        aria-pressed={isSaved}
-      >
-        <Star
-          className={`h-5 w-5 ${
-            isSaved ? "fill-yellow-400 text-yellow-500" : "text-zinc-400"
-          }`}
-        />
-      </button>
       <div className="flex gap-4">
         <div className="hidden min-w-10 flex-col items-center text-zinc-400 sm:flex">
           <button
@@ -499,6 +485,16 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange 
             >
               <Pencil className="h-4 w-4" />
               <span>Suggest Edit</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSaveToggle()}
+              disabled={saveLoading}
+              className={`inline-flex items-center gap-1.5 font-medium transition hover:text-zinc-900 disabled:opacity-50 ${isSaved ? "text-zinc-900" : ""}`}
+              aria-label={isSaved ? "Unsave note" : "Save note"}
+            >
+              <Bookmark className={`h-4 w-4 ${isSaved ? "fill-current" : ""}`} />
+              <span>{isSaved ? "Saved" : "Save"}</span>
             </button>
             <Link
               href={`/report-post?${reportQuery}`}
