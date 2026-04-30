@@ -1,31 +1,47 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
-import { AlertTriangle, ArrowDown, ArrowUp, CircleCheck, MessageSquare, Pencil, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, CircleCheck, ChevronDown, ChevronUp, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import type { AdminPost } from '../lib/moderation';
+
+interface AdminComment {
+  id: number;
+  authorId: string;
+  authorName: string;
+  authorEmail: string;
+  body: string;
+  createdAt: string;
+}
 
 interface ModerationPostCardProps {
   post: AdminPost;
   isAuthorBanned: boolean;
+  comments?: AdminComment[];
   onSaveEdit: (postId: number, updates: { title: string; body: string }) => Promise<void> | void;
   onDelete: (postId: number) => Promise<void> | void;
   onResolveReports: (postId: number) => Promise<void> | void;
   onBanUser: (classId: number, userId: string) => Promise<void> | void;
   onUnbanUser: (classId: number, userId: string) => Promise<void> | void;
+  onDeleteComment?: (commentId: number) => Promise<void> | void;
 }
 
 export default function ModerationPostCard({
   post,
   isAuthorBanned,
+  comments,
   onSaveEdit,
   onDelete,
   onResolveReports,
   onBanUser,
   onUnbanUser,
+  onDeleteComment,
 }: ModerationPostCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(post.title);
   const [bodyDraft, setBodyDraft] = useState(post.body);
+  const [areCommentsOpen, setAreCommentsOpen] = useState(false);
+  const commentItems = comments ?? [];
 
   const handleSave = async () => {
     const nextTitle = titleDraft.trim() || post.title;
@@ -130,6 +146,15 @@ export default function ModerationPostCard({
               <span>{post.comments_count} Comments</span>
             </span>
 
+            <button
+              type="button"
+              onClick={() => setAreCommentsOpen((current) => !current)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100"
+            >
+              {areCommentsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {areCommentsOpen ? 'Hide Comments' : 'View Comments'}
+            </button>
+
             {!isEditing && (
               <button
                 type="button"
@@ -183,6 +208,45 @@ export default function ModerationPostCard({
               </button>
             )}
           </div>
+
+          {areCommentsOpen && comments && (
+            <div className="mt-4 space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-bold uppercase tracking-wide text-zinc-500">Comments</h4>
+                <span className="text-xs font-medium text-zinc-400">{commentItems.length} total</span>
+              </div>
+
+              {commentItems.length > 0 ? (
+                <div className="space-y-3">
+                  {commentItems.map((comment) => (
+                    <article key={comment.id} className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
+                      <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <Link href={`/profile/${comment.authorId}`} className="font-semibold text-zinc-800 underline-offset-4 transition hover:text-zinc-950 hover:underline">
+                            {comment.authorName || comment.authorEmail || 'Unknown'}
+                          </Link>
+                          <span className="text-zinc-400">·</span>
+                          <span className="text-zinc-500">{new Date(comment.createdAt).toLocaleString()}</span>
+                        </div>
+                        {onDeleteComment && (
+                          <button
+                            type="button"
+                            onClick={() => void onDeleteComment(comment.id)}
+                            className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-700">{comment.body}</p>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-500">No comments for this class note.</p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </article>

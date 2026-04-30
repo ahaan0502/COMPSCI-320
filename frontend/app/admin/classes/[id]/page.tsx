@@ -1,5 +1,6 @@
 'use client';
 
+import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -7,12 +8,23 @@ import ModerationPostCard from '../../../components/ModerationPostCard';
 import type { AdminClassSummary, AdminPost } from '../../../lib/moderation';
 import {
   banUserFromCourse,
+  deleteModerationComment,
   deleteModerationPost,
   fetchModerationData,
   resolveModerationReports,
   saveModerationPost,
   unbanUserFromCourse,
 } from '../../../lib/moderation';
+
+interface AdminComment {
+  id: number;
+  postId: number;
+  authorId: string;
+  authorName: string;
+  authorEmail: string;
+  body: string;
+  createdAt: string;
+}
 
 export default function AdminClassNotesPage() {
   const params = useParams<{ id: string }>();
@@ -24,10 +36,20 @@ export default function AdminClassNotesPage() {
   const [posts, setPosts] = useState<AdminPost[]>([]);
   const [adminClasses, setAdminClasses] = useState<AdminClassSummary[]>([]);
   const [bannedUsersByCourse, setBannedUsersByCourse] = useState<Record<number, string[]>>({});
+  const [commentsByPost, setCommentsByPost] = useState<Record<number, AdminComment[]>>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const supabase = useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      ),
+    [],
+  );
 
   const loadClassDashboard = useCallback(async () => {
     if (Number.isNaN(classId)) {
@@ -50,12 +72,69 @@ export default function AdminClassNotesPage() {
       setPosts(moderationData.posts);
       setAdminClasses(moderationData.adminClasses);
       setBannedUsersByCourse(moderationData.bannedUsersByCourse);
+
+      const postIds = moderationData.posts.map((post) => post.id);
+      if (postIds.length > 0) {
+        const { data: commentsData, error: commentsError } = await supabase
+          .from('Comments')
+          .select('id, post_id, author_id, body, created_at')
+          .in('post_id', postIds)
+          .order('created_at', { ascending: true });
+
+        if (commentsError) {
+          throw commentsError;
+        }
+
+        const authorIds = Array.from(
+          new Set(
+            ((commentsData || []) as { author_id: string | null }[])
+              .map((comment) => comment.author_id)
+              .filter((authorId): authorId is string => Boolean(authorId)),
+          ),
+        );
+
+        const authorsById = new Map<string, { author_id: string; name: string | null; email: string | null }>();
+        if (authorIds.length > 0) {
+          const { data: authorRows, error: authorsError } = await supabase
+            .from('Users')
+            .select('author_id, name, email')
+            .in('author_id', authorIds);
+
+          if (authorsError) {
+            throw authorsError;
+          }
+
+          for (const author of (authorRows || []) as { author_id: string; name: string | null; email: string | null }[]) {
+            authorsById.set(author.author_id, author);
+          }
+        }
+
+        const groupedComments: Record<number, AdminComment[]> = {};
+        for (const row of (commentsData || []) as { id: number; post_id: number | null; author_id: string; body: string; created_at: string }[]) {
+          if (typeof row.post_id !== 'number') continue;
+          const author = authorsById.get(row.author_id);
+          const nextComment: AdminComment = {
+            id: row.id,
+            postId: row.post_id,
+            authorId: row.author_id,
+            authorName: author?.name ?? author?.email ?? 'Unknown',
+            authorEmail: author?.email ?? '',
+            body: row.body,
+            createdAt: row.created_at,
+          };
+          groupedComments[row.post_id] = [...(groupedComments[row.post_id] ?? []), nextComment];
+        }
+
+        setCommentsByPost(groupedComments);
+      } else {
+        setCommentsByPost({});
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load class moderation data.');
     } finally {
       setLoading(false);
     }
-  }, [classId, semesterId]);
+  }, [classId, semesterId, supabase]);
 
   useEffect(() => {
     void loadClassDashboard();
@@ -88,6 +167,10 @@ export default function AdminClassNotesPage() {
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'Moderation action failed.');
     }
+  };
+
+  const handleDeleteComment = async (commentId: number) => {
+    await refreshAfterAction(() => deleteModerationComment(commentId));
   };
 
   if (loading) {
@@ -173,6 +256,7 @@ export default function AdminClassNotesPage() {
                   key={post.id}
                   post={post}
                   isAuthorBanned={post.course_id !== null && (bannedUsersByCourse[post.course_id] ?? []).includes(post.author_id)}
+                  comments={commentsByPost[post.id] ?? []}
                   onSaveEdit={(postId, updates) => refreshAfterAction(() => saveModerationPost(postId, updates))}
                   onDelete={(postId) => refreshAfterAction(() => deleteModerationPost(postId))}
                   onResolveReports={(postId) =>
@@ -188,6 +272,7 @@ export default function AdminClassNotesPage() {
                     })
                   }
                   onUnbanUser={(courseId, userId) => refreshAfterAction(() => unbanUserFromCourse(courseId, userId))}
+                  onDeleteComment={handleDeleteComment}
                 />
               ))}
             </div>
