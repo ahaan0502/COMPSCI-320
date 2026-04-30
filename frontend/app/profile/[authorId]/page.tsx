@@ -83,12 +83,18 @@ export default function AuthorProfilePage() {
   const authorId = params.authorId;
   const [profile, setProfile] = useState<UserProfileState | null>(null);
   const [posts, setPosts] = useState<NotePost[]>([]);
+  const [userVotes, setUserVotes] = useState<Record<number, 1 | -1>>({});
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadProfile = async () => {
       const client = supabase();
+      const {
+        data: { session },
+      } = await client.auth.getSession();
+      setCurrentUserId(session?.user?.id ?? '');
 
       const { data: profileRow, error: profileError } = await client
         .from('Users')
@@ -162,8 +168,25 @@ export default function AuthorProfilePage() {
 
       const postIds = ((postsData || []) as SupabasePostRow[]).map((post) => post.post_id);
       const commentsCountByPost = new Map<number, number>();
+      const votesByPost: Record<number, 1 | -1> = {};
 
       if (postIds.length > 0) {
+        if (session?.user) {
+          const { data: votesData, error: votesError } = await client
+            .from('Post_Votes')
+            .select('post_id, value')
+            .eq('user_id', session.user.id)
+            .in('post_id', postIds);
+
+          if (votesError) {
+            console.error('Failed to load author votes:', votesError);
+          } else {
+            for (const row of (votesData || []) as { post_id: number; value: 1 | -1 }[]) {
+              votesByPost[row.post_id] = row.value;
+            }
+          }
+        }
+
         const { data: commentsData, error: commentsError } = await client
           .from('Comments')
           .select('post_id')
@@ -209,12 +232,86 @@ export default function AuthorProfilePage() {
         };
       });
 
+      setUserVotes(votesByPost);
       setPosts(mappedPosts);
       setLoading(false);
     };
 
     loadProfile();
   }, [authorId]);
+
+  const handleVote = async (postId: number, value: 1 | -1) => {
+    const post = posts.find((item) => item.id === postId);
+    if (!post || !currentUserId) return;
+
+    const existingVote = userVotes[postId] ?? null;
+    const isSameVote = existingVote === value;
+    const delta = isSameVote ? -value : existingVote !== null ? value * 2 : value;
+
+    setPosts((current) =>
+      current.map((item) =>
+        item.id === postId ? { ...item, votes: item.votes + delta } : item,
+      ),
+    );
+
+    setUserVotes((current) => {
+      const next = { ...current };
+      if (isSameVote) {
+        delete next[postId];
+      } else {
+        next[postId] = value;
+      }
+      return next;
+    });
+
+    const client = supabase();
+
+    if (isSameVote) {
+      await client.from('Post_Votes').delete().eq('user_id', currentUserId).eq('post_id', postId);
+    } else if (existingVote !== null) {
+      await client.from('Post_Votes').update({ value }).eq('user_id', currentUserId).eq('post_id', postId);
+    } else {
+      await client.from('Post_Votes').insert({ user_id: currentUserId, post_id: postId, value });
+    }
+
+    await client.from('Posts').update({ votes: post.votes + delta }).eq('post_id', postId);
+  };
+
+  const handleUpdatePost = async (postId: number, updates: { title: string; body: string }) => {
+    if (!currentUserId) return;
+
+    const client = supabase();
+    const updatedAt = new Date().toISOString();
+    const { data, error: updateError } = await client
+      .from('Posts')
+      .update({
+        title: updates.title,
+        body: updates.body,
+        updated_at: updatedAt,
+      })
+      .eq('post_id', postId)
+      .eq('author_id', currentUserId)
+      .select('post_id, title, body, updated_at')
+      .maybeSingle();
+
+    if (updateError) throw updateError;
+    if (!data) {
+      throw new Error('You can only edit your own posts.');
+    }
+
+    setPosts((current) =>
+      current.map((item) =>
+        item.id === postId
+          ? {
+              ...item,
+              title: data.title ?? updates.title,
+              body: data.body ?? updates.body,
+              updated_at: data.updated_at ?? updatedAt,
+            }
+          : item,
+      ),
+    );
+  };
 
   if (loading) {
     return (
@@ -278,7 +375,15 @@ export default function AuthorProfilePage() {
         <section className="space-y-4">
           <h2 className="text-2xl font-bold tracking-tight text-gray-900">Posts</h2>
           {posts.length > 0 ? (
-            posts.map((post) => <NoteCard key={post.id} post={post} />)
+            posts.map((post) => (
+              <NoteCard
+                key={post.id}
+                post={post}
+                userVote={userVotes[post.id] ?? null}
+                onVote={currentUserId ? handleVote : undefined}
+                onUpdatePost={currentUserId ? handleUpdatePost : undefined}
+              />
+            ))
           ) : (
             <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 py-20 text-center">
               <p className="text-xs font-bold uppercase tracking-widest text-gray-400">No posts shared.</p>

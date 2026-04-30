@@ -224,6 +224,7 @@ function EmptyState({ message }: { message: string }) {
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileState | null>(null);
+  const [userVotes, setUserVotes] = useState<Record<number, 1 | -1>>({});
   const [activeTab, setActiveTab] = useState<TabType>('posts');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -300,7 +301,7 @@ export default function ProfilePage() {
               .eq('author_id', session.user.id)
               .order('created_at', { ascending: false }),
             supabase.from('Comments').select('post_id'),
-            supabase.from('Post_Votes').select('post_id').eq('user_id', session.user.id).eq('value', 1),
+            supabase.from('Post_Votes').select('post_id, value').eq('user_id', session.user.id),
             supabase
               .from('Comments')
               .select(`
@@ -343,11 +344,18 @@ export default function ProfilePage() {
           commentsCountByPost.set(row.post_id, (commentsCountByPost.get(row.post_id) ?? 0) + 1);
         }
 
+        const votesByPost: Record<number, 1 | -1> = {};
+        for (const vote of ((votesData || []) as { post_id: number; value: 1 | -1 }[])) {
+          votesByPost[vote.post_id] = vote.value;
+        }
+        setUserVotes(votesByPost);
+
         const ownPosts = mapPosts((postsData || []) as SupabasePostRow[], commentsCountByPost);
 
         const likedPostIds = Array.from(
           new Set(
-            ((votesData || []) as { post_id: number }[])
+            ((votesData || []) as { post_id: number; value: 1 | -1 }[])
+              .filter((vote) => vote.value === 1)
               .map((vote) => vote.post_id)
               .filter((postId): postId is number => typeof postId === 'number'),
           ),
@@ -435,6 +443,109 @@ export default function ProfilePage() {
 
     void loadProfile();
   }, []);
+
+  const handleVote = async (postId: number, value: 1 | -1) => {
+    if (!profile) return;
+
+    const post = [...profile.posts, ...profile.likedPosts].find((item) => item.id === postId);
+    if (!post) return;
+
+    const existingVote = userVotes[postId] ?? null;
+    const isSameVote = existingVote === value;
+    const delta = isSameVote ? -value : existingVote !== null ? value * 2 : value;
+    const nextVote = isSameVote ? null : value;
+    const updatedPost = { ...post, votes: post.votes + delta };
+
+    const updatePosts = (items: NotePost[]) =>
+      items.map((item) => (item.id === postId ? updatedPost : item));
+
+    const updateLikedPosts = (items: NotePost[]) => {
+      if (nextVote === 1) {
+        const hasPost = items.some((item) => item.id === postId);
+        return hasPost
+          ? items.map((item) => (item.id === postId ? updatedPost : item))
+          : [updatedPost, ...items];
+      }
+
+      return items.filter((item) => item.id !== postId);
+    };
+
+    setProfile((current) =>
+      current
+        ? {
+            ...current,
+            posts: updatePosts(current.posts),
+            likedPosts: updateLikedPosts(current.likedPosts),
+          }
+        : current,
+    );
+
+    setUserVotes((current) => {
+      const next = { ...current };
+      if (nextVote === null) {
+        delete next[postId];
+      } else {
+        next[postId] = nextVote;
+      }
+      return next;
+    });
+
+    const supabase = getClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.user) return;
+
+    if (isSameVote) {
+      await supabase.from('Post_Votes').delete().eq('user_id', session.user.id).eq('post_id', postId);
+    } else if (existingVote !== null) {
+      await supabase.from('Post_Votes').update({ value }).eq('user_id', session.user.id).eq('post_id', postId);
+    } else {
+      await supabase.from('Post_Votes').insert({ user_id: session.user.id, post_id: postId, value });
+    }
+
+    await supabase.from('Posts').update({ votes: post.votes + delta }).eq('post_id', postId);
+  };
+
+  const handleUpdatePost = async (postId: number, updates: { title: string; body: string }) => {
+    if (!profile) return;
+
+    const supabase = getClient();
+    const updatedAt = new Date().toISOString();
+    const { data, error: updateError } = await supabase
+      .from('Posts')
+      .update({
+        title: updates.title,
+        body: updates.body,
+        updated_at: updatedAt,
+      })
+      .eq('post_id', postId)
+      .eq('author_id', profile.userId)
+      .select('post_id, title, body, updated_at')
+      .maybeSingle();
+
+    if (updateError) throw updateError;
+
+    if (!data) {
+      throw new Error('You can only edit your own posts.');
+    }
+
+    const updatePost = (post: NotePost): NotePost =>
+      post.id === postId
+        ? {
+            ...post,
+            title: data.title ?? updates.title,
+            body: data.body ?? updates.body,
+            updated_at: data.updated_at ?? updatedAt,
+          }
+        : post;
+
+    setProfile({
+      ...profile,
+      posts: profile.posts.map(updatePost),
+      likedPosts: profile.likedPosts.map(updatePost),
+    });
+  };
 
   const handleSaveDisplayName = async () => {
     if (!profile) return;
@@ -646,11 +757,33 @@ export default function ProfilePage() {
 
         <div className="space-y-4">
           {activeTab === 'posts' &&
-            (profile.posts.length > 0 ? profile.posts.map((post) => <NoteCard key={post.id} post={post} />) : <EmptyState message="No posts shared." />)}
+            (profile.posts.length > 0 ? (
+              profile.posts.map((post) => (
+                <NoteCard
+                  key={post.id}
+                  post={post}
+                  currentUserId={profile.userId}
+                  userVote={userVotes[post.id] ?? null}
+                  onVote={handleVote}
+                  onUpdatePost={handleUpdatePost}
+                />
+              ))
+            ) : (
+              <EmptyState message="No posts shared." />
+            ))}
 
           {activeTab === 'liked' &&
             (profile.likedPosts.length > 0 ? (
-              profile.likedPosts.map((post) => <NoteCard key={post.id} post={post} />)
+              profile.likedPosts.map((post) => (
+                <NoteCard
+                  key={post.id}
+                  post={post}
+                  currentUserId={profile.userId}
+                  userVote={userVotes[post.id] ?? null}
+                  onVote={handleVote}
+                  onUpdatePost={handleUpdatePost}
+                />
+              ))
             ) : (
               <EmptyState message="No liked content." />
             ))}
