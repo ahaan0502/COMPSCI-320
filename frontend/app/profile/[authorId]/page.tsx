@@ -159,6 +159,20 @@ export default function AuthorProfilePage() {
         return;
       }
 
+      const { data: { session } } = await client.auth.getSession();
+      const postIds = (postsData || []).map((p: SupabasePostRow) => p.post_id);
+      const userVoteMap: Record<number, number> = {};
+      if (session?.user && postIds.length > 0) {
+        const { data: votesData } = await client
+          .from('Post_Votes')
+          .select('post_id, value')
+          .eq('user_id', session.user.id)
+          .in('post_id', postIds);
+        for (const v of (votesData || [])) {
+          userVoteMap[v.post_id] = v.value;
+        }
+      }
+
       const mappedPosts: NotePost[] = ((postsData || []) as SupabasePostRow[]).map((post) => {
         const user = firstRelation(post.Users);
         const course = firstRelation(post.Courses);
@@ -175,6 +189,7 @@ export default function AuthorProfilePage() {
           group_id: post.group_id,
           tags: post.tags ?? [],
           votes: post.votes ?? 0,
+          userVote: userVoteMap[post.post_id] ?? 0,
           updated_at: post.updated_at ?? post.created_at,
           is_deleted: false,
           course_id: post.course_id,
@@ -195,6 +210,33 @@ export default function AuthorProfilePage() {
 
     loadProfile();
   }, [authorId]);
+
+  const handleVote = async (postId: number, value: 1 | -1) => {
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+
+    const prevVote = post.userVote ?? 0;
+    const isSameVote = prevVote === value;
+    const newVote = isSameVote ? 0 : value;
+    const delta = isSameVote ? -value : prevVote !== 0 ? value * 2 : value;
+
+    setPosts((prev) =>
+      prev.map((p) => p.id === postId ? { ...p, votes: p.votes + delta, userVote: newVote } : p)
+    );
+
+    const client = supabase();
+    const { data: { session } } = await client.auth.getSession();
+    if (!session?.user) return;
+
+    if (isSameVote) {
+      await client.from('Post_Votes').delete()
+        .eq('user_id', session.user.id).eq('post_id', postId);
+    } else {
+      await client.from('Post_Votes').upsert({ user_id: session.user.id, post_id: postId, value });
+    }
+
+    await client.from('Posts').update({ votes: post.votes + delta }).eq('post_id', postId);
+  };
 
   if (loading) {
     return (
@@ -258,7 +300,7 @@ export default function AuthorProfilePage() {
         <section className="space-y-4">
           <h2 className="text-2xl font-bold tracking-tight text-gray-900">Posts</h2>
           {posts.length > 0 ? (
-            posts.map((post) => <NoteCard key={post.id} post={post} />)
+            posts.map((post) => <NoteCard key={post.id} post={post} onVote={(value) => handleVote(post.id, value)} />)
           ) : (
             <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 py-20 text-center">
               <p className="text-xs font-bold uppercase tracking-widest text-gray-400">No posts shared.</p>

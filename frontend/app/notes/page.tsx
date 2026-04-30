@@ -245,6 +245,18 @@ function NotesPageContent() {
         return;
       }
 
+      const postIds = (postsData || []).map((p: SupabasePostRow) => p.post_id);
+      const { data: votesData } = await supabase
+        .from('Post_Votes')
+        .select('post_id, value')
+        .eq('user_id', session.user.id)
+        .in('post_id', postIds);
+
+      const userVoteMap: Record<number, number> = {};
+      for (const v of (votesData || [])) {
+        userVoteMap[v.post_id] = v.value;
+      }
+
       const mapped: NotePost[] = ((postsData || []) as SupabasePostRow[]).map((post) => {
         const user = Array.isArray(post.Users) ? post.Users[0] : post.Users;
         const course = Array.isArray(post.Courses) ? post.Courses[0] : post.Courses;
@@ -261,6 +273,7 @@ function NotesPageContent() {
           group_id: post.group_id,
           tags: post.tags,
           votes: post.votes ?? 0,
+          userVote: userVoteMap[post.post_id] ?? 0,
           updated_at: post.updated_at,
           is_deleted: false,
           course_id: post.course_id,
@@ -282,6 +295,46 @@ function NotesPageContent() {
 
     fetchPosts();   
   }, [selectedClassId]);
+
+  const handleVote = async (postId: number, value: 1 | -1) => {
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+
+    const prevVote = post.userVote ?? 0;
+    const isSameVote = prevVote === value;
+    const newVote = isSameVote ? 0 : value;
+    const delta = isSameVote ? -value : prevVote !== 0 ? value * 2 : value;
+
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId ? { ...p, votes: p.votes + delta, userVote: newVote } : p
+      )
+    );
+
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+
+    if (isSameVote) {
+      await supabase
+        .from('Post_Votes')
+        .delete()
+        .eq('user_id', session.user.id)
+        .eq('post_id', postId);
+    } else {
+      await supabase
+        .from('Post_Votes')
+        .upsert({ user_id: session.user.id, post_id: postId, value });
+    }
+
+    await supabase
+      .from('Posts')
+      .update({ votes: post.votes + delta })
+      .eq('post_id', postId);
+  };
 
   const filteredPosts = useMemo(
     () => sortPosts(applyFeedFilters(posts, searchQuery, sidebarFilters), activeTab),
@@ -342,7 +395,7 @@ function NotesPageContent() {
 
           <div className="space-y-4">
             {filteredPosts.map((post) => (
-              <NoteCard key={post.id} post={post} />
+              <NoteCard key={post.id} post={post} onVote={(value) => handleVote(post.id, value)} />
             ))}
           </div>
 

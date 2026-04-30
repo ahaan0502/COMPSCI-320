@@ -182,7 +182,7 @@ function formatDisplayName(name: string | null | undefined, fallbackEmail: strin
   return formatFallbackName(fallbackEmail);
 }
 
-function mapPosts(posts: SupabasePostRow[], commentsCountByPost: Map<number, number>): NotePost[] {
+function mapPosts(posts: SupabasePostRow[], commentsCountByPost: Map<number, number>, userVoteMap: Record<number, number> = {}): NotePost[] {
   return posts.map((post) => {
     const user = firstRelation(post.Users);
     const course = firstRelation(post.Courses);
@@ -199,6 +199,7 @@ function mapPosts(posts: SupabasePostRow[], commentsCountByPost: Map<number, num
       group_id: post.group_id,
       tags: normalizeTags(post.tags),
       votes: post.votes ?? 0,
+      userVote: userVoteMap[post.post_id] ?? 0,
       updated_at: post.updated_at ?? post.created_at,
       is_deleted: false,
       course_id: post.course_id,
@@ -300,7 +301,7 @@ export default function ProfilePage() {
               .eq('author_id', session.user.id)
               .order('created_at', { ascending: false }),
             supabase.from('Comments').select('post_id'),
-            supabase.from('Post_Votes').select('post_id').eq('user_id', session.user.id).eq('value', 1),
+            supabase.from('Post_Votes').select('post_id, value').eq('user_id', session.user.id),
             supabase
               .from('Comments')
               .select(`
@@ -343,12 +344,18 @@ export default function ProfilePage() {
           commentsCountByPost.set(row.post_id, (commentsCountByPost.get(row.post_id) ?? 0) + 1);
         }
 
-        const ownPosts = mapPosts((postsData || []) as SupabasePostRow[], commentsCountByPost);
+        const userVoteMap: Record<number, number> = {};
+        for (const v of ((votesData || []) as { post_id: number; value: number }[])) {
+          userVoteMap[v.post_id] = v.value;
+        }
+
+        const ownPosts = mapPosts((postsData || []) as SupabasePostRow[], commentsCountByPost, userVoteMap);
 
         const likedPostIds = Array.from(
           new Set(
-            ((votesData || []) as { post_id: number }[])
-              .map((vote) => vote.post_id)
+            ((votesData || []) as { post_id: number; value: number }[])
+              .filter((v) => v.value === 1)
+              .map((v) => v.post_id)
               .filter((postId): postId is number => typeof postId === 'number'),
           ),
         );
@@ -391,7 +398,7 @@ export default function ProfilePage() {
 
           if (likedPostsError) throw likedPostsError;
 
-          likedPosts = mapPosts((likedPostsData || []) as SupabasePostRow[], commentsCountByPost);
+          likedPosts = mapPosts((likedPostsData || []) as SupabasePostRow[], commentsCountByPost, userVoteMap);
         }
 
         const displayName = formatDisplayName(userProfile?.name, userProfile?.email || email, metadataName);
@@ -435,6 +442,36 @@ export default function ProfilePage() {
 
     void loadProfile();
   }, []);
+
+  const handleVote = async (postId: number, value: 1 | -1) => {
+    if (!profile) return;
+
+    const post = [...profile.posts, ...profile.likedPosts].find((p) => p.id === postId);
+    if (!post) return;
+
+    const prevVote = post.userVote ?? 0;
+    const isSameVote = prevVote === value;
+    const newVote = isSameVote ? 0 : value;
+    const delta = isSameVote ? -value : prevVote !== 0 ? value * 2 : value;
+
+    const updateList = (list: NotePost[]) =>
+      list.map((p) => p.id === postId ? { ...p, votes: p.votes + delta, userVote: newVote } : p);
+
+    setProfile((prev) => prev ? { ...prev, posts: updateList(prev.posts), likedPosts: updateList(prev.likedPosts) } : prev);
+
+    const supabase = getClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+
+    if (isSameVote) {
+      await supabase.from('Post_Votes').delete()
+        .eq('user_id', session.user.id).eq('post_id', postId);
+    } else {
+      await supabase.from('Post_Votes').upsert({ user_id: session.user.id, post_id: postId, value });
+    }
+
+    await supabase.from('Posts').update({ votes: post.votes + delta }).eq('post_id', postId);
+  };
 
   const handleSaveDisplayName = async () => {
     if (!profile) return;
@@ -646,11 +683,11 @@ export default function ProfilePage() {
 
         <div className="space-y-4">
           {activeTab === 'posts' &&
-            (profile.posts.length > 0 ? profile.posts.map((post) => <NoteCard key={post.id} post={post} />) : <EmptyState message="No posts shared." />)}
+            (profile.posts.length > 0 ? profile.posts.map((post) => <NoteCard key={post.id} post={post} onVote={(value) => handleVote(post.id, value)} />) : <EmptyState message="No posts shared." />)}
 
           {activeTab === 'liked' &&
             (profile.likedPosts.length > 0 ? (
-              profile.likedPosts.map((post) => <NoteCard key={post.id} post={post} />)
+              profile.likedPosts.map((post) => <NoteCard key={post.id} post={post} onVote={(value) => handleVote(post.id, value)} />)
             ) : (
               <EmptyState message="No liked content." />
             ))}

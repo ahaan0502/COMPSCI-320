@@ -22,6 +22,7 @@ export interface NotePost {
   group_id: number | null;
   tags: string[];
   votes: number;
+  userVote?: number;
   updated_at: string;
   is_deleted: boolean;
   course_id: number | null;
@@ -37,29 +38,24 @@ export interface NotePost {
 
 interface NoteCardProps {
   post: NotePost;
+  onVote?: (value: 1 | -1) => void;
 }
 
 function formatRelativeTime(timestamp: string): string {
   const deltaMs = Date.now() - new Date(timestamp).getTime();
   const minutes = Math.floor(deltaMs / (1000 * 60));
 
-  if (minutes < 1) {
-    return "just now";
-  }
-  if (minutes < 60) {
-    return `${minutes}m ago`;
-  }
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
 
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return `${hours}h ago`;
-  }
+  if (hours < 24) return `${hours}h ago`;
 
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
 }
 
-export default function NoteCard({ post }: NoteCardProps) {
+export default function NoteCard({ post, onVote }: NoteCardProps) {
   const reportQuery = new URLSearchParams({
     postId: String(post.id),
     postTitle: post.title,
@@ -81,10 +77,11 @@ export default function NoteCard({ post }: NoteCardProps) {
   return (
     <article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5">
       <div className="flex gap-4">
-        <div className="hidden min-w-10 flex-col items-center text-zinc-400 sm:flex">
+        <div className="hidden min-w-10 flex-col items-center sm:flex">
           <button
             type="button"
-            className="rounded p-1 transition hover:bg-zinc-100 hover:text-zinc-700"
+            onClick={() => onVote?.(1)}
+            className={`rounded p-1 transition hover:bg-zinc-100 ${post.userVote === 1 ? "text-orange-500" : "text-zinc-400 hover:text-zinc-700"}`}
             aria-label="Upvote"
           >
             <ArrowUp className="h-4 w-4" />
@@ -92,7 +89,8 @@ export default function NoteCard({ post }: NoteCardProps) {
           <span className="my-1 text-lg font-semibold text-orange-500">{post.votes}</span>
           <button
             type="button"
-            className="rounded p-1 transition hover:bg-zinc-100 hover:text-zinc-700"
+            onClick={() => onVote?.(-1)}
+            className={`rounded p-1 transition hover:bg-zinc-100 ${post.userVote === -1 ? "text-blue-500" : "text-zinc-400 hover:text-zinc-700"}`}
             aria-label="Downvote"
           >
             <ArrowDown className="h-4 w-4" />
