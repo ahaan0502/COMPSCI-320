@@ -473,6 +473,46 @@ export default function ProfilePage() {
     }
   };
 
+  const handleUpdatePost = async (postId: number, updates: { title: string; body: string }) => {
+    if (!profile) return;
+
+    const supabase = getClient();
+    const updatedAt = new Date().toISOString();
+    const { data, error: updateError } = await supabase
+      .from('Posts')
+      .update({
+        title: updates.title,
+        body: updates.body,
+        updated_at: updatedAt,
+      })
+      .eq('post_id', postId)
+      .eq('author_id', profile.userId)
+      .select('post_id, title, body, updated_at')
+      .maybeSingle();
+
+    if (updateError) throw updateError;
+
+    if (!data) {
+      throw new Error('You can only edit your own posts.');
+    }
+
+    const updatePost = (post: NotePost): NotePost =>
+      post.id === postId
+        ? {
+            ...post,
+            title: data.title ?? updates.title,
+            body: data.body ?? updates.body,
+            updated_at: data.updated_at ?? updatedAt,
+          }
+        : post;
+
+    setProfile({
+      ...profile,
+      posts: profile.posts.map(updatePost),
+      likedPosts: profile.likedPosts.map(updatePost),
+    });
+  };
+
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !profile) return;
@@ -646,11 +686,29 @@ export default function ProfilePage() {
 
         <div className="space-y-4">
           {activeTab === 'posts' &&
-            (profile.posts.length > 0 ? profile.posts.map((post) => <NoteCard key={post.id} post={post} />) : <EmptyState message="No posts shared." />)}
+            (profile.posts.length > 0 ? (
+              profile.posts.map((post) => (
+                <NoteCard
+                  key={post.id}
+                  post={post}
+                  currentUserId={profile.userId}
+                  onUpdatePost={handleUpdatePost}
+                />
+              ))
+            ) : (
+              <EmptyState message="No posts shared." />
+            ))}
 
           {activeTab === 'liked' &&
             (profile.likedPosts.length > 0 ? (
-              profile.likedPosts.map((post) => <NoteCard key={post.id} post={post} />)
+              profile.likedPosts.map((post) => (
+                <NoteCard
+                  key={post.id}
+                  post={post}
+                  currentUserId={profile.userId}
+                  onUpdatePost={handleUpdatePost}
+                />
+              ))
             ) : (
               <EmptyState message="No liked content." />
             ))}

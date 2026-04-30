@@ -553,6 +553,46 @@ function NotesPageContent() {
     }
   };
 
+  const handleUpdatePost = async (postId: number, updates: { title: string; body: string }) => {
+    if (!currentUserId) {
+      throw new Error("Please sign in to edit this post.");
+    }
+
+    const updatedAt = new Date().toISOString();
+    const { data, error: updateError } = await supabase
+      .from("Posts")
+      .update({
+        title: updates.title,
+        body: updates.body,
+        updated_at: updatedAt,
+      })
+      .eq("post_id", postId)
+      .eq("author_id", currentUserId)
+      .select("post_id, title, body, updated_at")
+      .maybeSingle();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    if (!data) {
+      throw new Error("You can only edit your own posts.");
+    }
+
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId
+          ? {
+              ...post,
+              title: data.title ?? updates.title,
+              body: data.body ?? updates.body,
+              updated_at: data.updated_at ?? updatedAt,
+            }
+          : post,
+      ),
+    );
+  };
+
   const filteredPosts = useMemo(
     () => sortPosts(applyFeedFilters(posts, searchQuery, sidebarFilters), activeTab),
     [searchQuery, sidebarFilters, posts, activeTab],
@@ -622,6 +662,7 @@ function NotesPageContent() {
                 currentUserId={currentUserId}
                 userVote={userVotes[post.id] ?? null}
                 onVote={handleVote}
+                onUpdatePost={handleUpdatePost}
               />
             ))}
           </div>

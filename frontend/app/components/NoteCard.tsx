@@ -45,6 +45,7 @@ interface NoteCardProps {
   currentUserId?: string;
   userVote?: 1 | -1 | null;
   onVote?: (postId: number, value: 1 | -1) => Promise<void>;
+  onUpdatePost?: (postId: number, updates: { title: string; body: string }) => Promise<void> | void;
 }
 
 interface CommentRow {
@@ -91,7 +92,7 @@ function formatRelativeTime(timestamp: string): string {
   return `${days}d ago`;
 }
 
-export default function NoteCard({ post, userVote = null, onVote }: NoteCardProps) {
+export default function NoteCard({ post, currentUserId, userVote = null, onVote, onUpdatePost }: NoteCardProps) {
   const supabase = useMemo(
     () =>
       createBrowserClient(
@@ -110,6 +111,11 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [shareState, setShareState] = useState<ShareState>("idle");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(post.title);
+  const [editedBody, setEditedBody] = useState(post.body);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const reportQuery = new URLSearchParams({
     postId: String(post.id),
@@ -128,6 +134,7 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
   const attachmentName = post.attachment_url
     ? decodeURIComponent(post.attachment_url.split("/").pop()?.split("?")[0] || "attachment")
     : null;
+  const isOwnPost = Boolean(currentUserId && post.author_id === currentUserId);
 
   useEffect(() => {
     const loadSession = async () => {
@@ -314,6 +321,47 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
     }
   };
 
+  const startEditing = () => {
+    setEditedTitle(post.title);
+    setEditedBody(post.body);
+    setEditError(null);
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditedTitle(post.title);
+    setEditedBody(post.body);
+    setEditError(null);
+    setIsEditing(false);
+  };
+
+  const handleSaveEdit = async () => {
+    const nextTitle = editedTitle.trim();
+    const nextBody = editedBody.trim();
+
+    if (!nextTitle) {
+      setEditError("Title is required.");
+      return;
+    }
+
+    if (!nextBody) {
+      setEditError("Content is required.");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setEditError(null);
+
+    try {
+      await onUpdatePost?.(post.id, { title: nextTitle, body: nextBody });
+      setIsEditing(false);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Failed to update post.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   return (
     <article
       id={`post-${post.id}`}
@@ -371,10 +419,54 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
             </span>
           </div>
 
-          <h2 className="mb-2 text-2xl font-bold tracking-tight text-zinc-800">{post.title}</h2>
-          <p className="mb-4 whitespace-pre-wrap text-[1.03rem] leading-relaxed text-zinc-700">
-            {post.body}
-          </p>
+          {isEditing ? (
+            <div className="mb-4 space-y-3">
+              {editError && (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {editError}
+                </p>
+              )}
+              <input
+                type="text"
+                value={editedTitle}
+                onChange={(event) => setEditedTitle(event.target.value)}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-2xl font-bold tracking-tight text-zinc-800 outline-none transition focus:border-red-700"
+                aria-label="Post title"
+              />
+              <textarea
+                value={editedBody}
+                onChange={(event) => setEditedBody(event.target.value)}
+                rows={4}
+                className="w-full resize-y rounded-lg border border-zinc-300 px-3 py-2 text-[1.03rem] leading-relaxed text-zinc-700 outline-none transition focus:border-red-700"
+                aria-label="Post content"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={cancelEditing}
+                  disabled={isSavingEdit}
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveEdit()}
+                  disabled={isSavingEdit}
+                  className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+                >
+                  {isSavingEdit ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h2 className="mb-2 text-2xl font-bold tracking-tight text-zinc-800">{post.title}</h2>
+              <p className="mb-4 whitespace-pre-wrap text-[1.03rem] leading-relaxed text-zinc-700">
+                {post.body}
+              </p>
+            </>
+          )}
 
           {post.attachment_url && (
             <div className="mb-4">
@@ -408,13 +500,16 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
               <Share2 className="h-4 w-4" />
               <span>{shareState === "copied" ? "Link Copied" : "Share"}</span>
             </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 font-medium transition hover:text-zinc-900"
-            >
-              <Pencil className="h-4 w-4" />
-              <span>Suggest Edit</span>
-            </button>
+            {isOwnPost && onUpdatePost && !isEditing && (
+              <button
+                type="button"
+                onClick={startEditing}
+                className="inline-flex items-center gap-1.5 font-medium transition hover:text-zinc-900"
+              >
+                <Pencil className="h-4 w-4" />
+                <span>Edit</span>
+              </button>
+            )}
             <Link
               href={`/report-post?${reportQuery}`}
               className="inline-flex items-center gap-1.5 font-medium text-red-700 transition hover:text-red-900"
