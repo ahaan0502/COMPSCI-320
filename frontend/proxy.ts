@@ -18,8 +18,13 @@ export default async function proxy(request: NextRequest) {
   );
 
   const { data: { session } } = await supabase.auth.getSession();
+  const isHomePage = request.nextUrl.pathname === '/';
 
-  if (!session) {
+  if (session && isHomePage) {
+    return NextResponse.redirect(new URL('/classes', request.url));
+  }
+
+  if (!session && !isHomePage) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
@@ -27,5 +32,5 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/classes/:path*', '/notes/:path*', '/catalogue/:path*'],
+  matcher: ['/', '/classes/:path*', '/notes/:path*', '/catalogue/:path*'],
 };
