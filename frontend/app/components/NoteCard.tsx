@@ -348,8 +348,7 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
       return;
     }
 
-    const shareUrl = new URL(window.location.href);
-    shareUrl.hash = `post-${post.id}`;
+    const shareUrl = new URL(`/notes/${post.id}`, window.location.origin);
 
     const shareData = {
       title: post.title,
