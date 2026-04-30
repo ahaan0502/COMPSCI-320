@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
 import { useState } from "react";
-import NoteCard, { type NotePost } from '../components/NoteCard';
+import NoteCard, { type NotePost } from "../components/NoteCard";
 
 export default function SavedNotesPage() {
   const [savedPosts, setSavedPosts] = useState<NotePost[]>([
@@ -51,10 +51,6 @@ export default function SavedNotesPage() {
     },
   ]);
 
-  const handleUnsave = (id: number) => {
-    setSavedPosts((prev) => prev.filter((post) => post.id !== id));
-  };
-
   return (
     <main className="min-h-screen w-full bg-gray-50 px-6 py-10">
       
@@ -72,20 +68,7 @@ export default function SavedNotesPage() {
       {savedPosts.length > 0 ? (
         <div className="flex flex-col gap-5">
           {savedPosts.map((post) => (
-            
-            /* Wrapper so we DON'T modify NoteCard */
-            <div key={post.id} className="relative">
-              
-              {/* Unsave Button */}
-              <button
-                onClick={() => handleUnsave(post.id)}
-                className="absolute right-4 top-4 z-10 text-sm font-semibold text-red-600 hover:underline"
-              >
-                Unsave
-              </button>
-
-              <NoteCard post={post} />
-            </div>
+            <NoteCard key={post.id} post={post} />
           ))}
         </div>
       ) : (

@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Pencil,
   Share2,
+  Star
 } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
@@ -110,6 +111,8 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [shareState, setShareState] = useState<ShareState>("idle");
+  const [isSaved, setIsSaved] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
 
   const reportQuery = new URLSearchParams({
     postId: String(post.id),
@@ -314,11 +317,78 @@ export default function NoteCard({ post, userVote = null, onVote }: NoteCardProp
     }
   };
 
+  useEffect(() => {
+    const checkSaved = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) return;
+
+      const { data } = await supabase
+        .from("savednotes")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .eq("post_id", post.id)
+        .maybeSingle();
+
+      setIsSaved(!!data);
+    };
+
+    void checkSaved();
+  }, [post.id, supabase]);
+
+  const handleSaveToggle = async () => {
+    if (saveLoading) return;
+    setSaveLoading(true);
+  
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+  
+    if (!session?.user) {
+      setSaveLoading(false);
+      return;
+    }
+  
+    if (isSaved) {
+      await supabase
+        .from("savednotes")
+        .delete()
+        .eq("user_id", session.user.id)
+        .eq("post_id", post.id);
+  
+      setIsSaved(false);
+    } else {
+      await supabase.from("savednotes").insert({
+        user_id: session.user.id,
+        post_id: post.id,
+      });
+  
+      setIsSaved(true);
+    }
+  
+    setSaveLoading(false);
+  };
+
   return (
     <article
       id={`post-${post.id}`}
-      className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
+      className="relative rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-5"
     >
+      <button
+              onClick={handleSaveToggle}
+              disabled={saveLoading}
+              className="absolute right-4 top-4 rounded-full p-2 hover:bg-zinc-100"
+            >
+              <Star
+                className={`h-5 w-5 ${
+                  isSaved
+                    ? "fill-yellow-400 text-yellow-500"
+                    : "text-zinc-400"
+                }`}
+              />
+      </button>
       <div className="flex gap-4">
         <div className="hidden min-w-10 flex-col items-center text-zinc-400 sm:flex">
           <button
