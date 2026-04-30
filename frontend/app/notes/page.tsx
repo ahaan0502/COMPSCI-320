@@ -1,13 +1,212 @@
-'use client';
+"use client";
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { Search } from 'lucide-react';
-import { createBrowserClient } from '@supabase/ssr';
-import NoteCard, { type NotePost, type PostVisibility } from '../components/NoteCard';
+import { createBrowserClient } from "@supabase/ssr";
+import { Search } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import NoteCard, { type NotePost, type PostVisibility } from "../components/NoteCard";
 
-type FeedTab = 'hot' | 'new' | 'top';
+interface SidebarClassRow {
+  course_id: number;
+  Courses:
+    | {
+        course_id: number;
+        course_number: string | null;
+        title: string | null;
+      }[]
+    | {
+        course_id: number;
+        course_number: string | null;
+        title: string | null;
+      }
+    | null;
+  Semesters:
+    | {
+        semester_id: number;
+        term: string | null;
+        year: string | null;
+      }[]
+    | {
+        semester_id: number;
+        term: string | null;
+        year: string | null;
+      }
+    | null;
+}
+
+function firstRelation<T>(value: T[] | T | null): T | null {
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+function SidebarClasses() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeClassId = searchParams.get("classId");
+
+  const [classes, setClasses] = useState<
+    {
+      courseId: number;
+      semesterId: number;
+      label: string;
+      semesterLabel: string;
+    }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchClasses = async () => {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        setClasses([]);
+        setLoading(false);
+        setError("Supabase configuration is missing");
+        return;
+      }
+
+      const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        setClasses([]);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+
+      const { data, error: classError } = await supabase
+        .from("Student_Enrolled_Courses")
+        .select(
+          `
+          course_id,
+          semester_id,
+          Courses (
+            course_id,
+            course_number,
+            title
+          ),
+          Semesters (
+            semester_id,
+            term,
+            year
+          )
+        `,
+        )
+        .eq("author_id", session.user.id);
+
+      if (classError) {
+        console.error("Sidebar fetch error:", classError);
+        setError("Failed to load classes");
+        setLoading(false);
+        return;
+      }
+
+      const rows = (data || []) as SidebarClassRow[];
+      const mapped = rows
+        .map((row) => {
+          const course = firstRelation(row.Courses);
+          const semester = firstRelation(row.Semesters);
+
+          if (!course || !semester) return null;
+
+          return {
+            courseId: course.course_id,
+            semesterId: semester.semester_id,
+            label: `${course.course_number ?? ""} - ${course.title ?? ""}`,
+            semesterLabel: `${semester.term ?? ""} ${semester.year ?? ""}`,
+          };
+        })
+        .filter(
+          (
+            value,
+          ): value is {
+            courseId: number;
+            semesterId: number;
+            label: string;
+            semesterLabel: string;
+          } => value !== null,
+        );
+
+      setClasses(mapped);
+      setLoading(false);
+    };
+
+    void fetchClasses();
+  }, []);
+
+  if (loading) {
+    return (
+      <aside className="rounded-2xl border border-zinc-200 bg-white p-5 text-zinc-700 shadow-sm">
+        <p className="text-zinc-500">Loading classes...</p>
+      </aside>
+    );
+  }
+
+  if (error) {
+    return (
+      <aside className="rounded-2xl border border-red-100 bg-red-50 p-5 text-zinc-700 shadow-sm">
+        <p className="text-red-600">{error}</p>
+      </aside>
+    );
+  }
+
+  if (!classes.length) {
+    return (
+      <aside className="rounded-2xl border border-zinc-200 bg-white p-5 text-zinc-700 shadow-sm">
+        <h2 className="mb-6 text-3xl font-bold tracking-tight text-zinc-800">My Classes</h2>
+        <p className="text-zinc-600">
+          No classes found.{" "}
+          <Link href="/catalogue/departments" className="font-bold text-[#7A1F1F]">
+            Browse Course Catalog
+          </Link>
+        </p>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="rounded-2xl border border-zinc-200 bg-white p-5 text-zinc-700 shadow-sm">
+      <h2 className="mb-4 text-2xl font-bold tracking-tight text-zinc-800">My Classes</h2>
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => router.push("/notes")}
+          className={`w-full rounded-md px-3 py-2 text-left text-sm ${
+            !activeClassId ? "bg-zinc-100 font-semibold" : "hover:bg-zinc-50"
+          }`}
+        >
+          All classes
+        </button>
+        {classes.map((c) => {
+          const isActive = String(c.courseId) === activeClassId;
+          return (
+            <button
+              key={`${c.courseId}-${c.semesterId}`}
+              type="button"
+              onClick={() => router.push(`/notes?classId=${c.courseId}`)}
+              className={`w-full rounded-md px-3 py-2 text-left text-sm ${
+                isActive ? "bg-zinc-100 font-semibold" : "hover:bg-zinc-50"
+              }`}
+            >
+              <div className="flex justify-between gap-3">
+                <span>{c.label}</span>
+                <span className="text-xs text-zinc-400">{c.semesterLabel}</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
+type FeedTab = "hot" | "new" | "top";
 
 interface NotesFeedFilters {
   courseIds: number[];
@@ -31,32 +230,41 @@ interface SupabasePostRow {
   semester_id: number | null;
   is_report: boolean | null;
   attachment_url: string | null;
-  Users: {
-    name: string | null;
-    email: string | null;
-  }[] | {
-    name: string | null;
-    email: string | null;
-  } | null;
-  Courses: {
-    department_id: number | null;
-    course_number: string | null;
-    title: string | null;
-  }[] | {
-    department_id: number | null;
-    course_number: string | null;
-    title: string | null;
-  } | null;
-  Semesters: {
-    term: string | null;
-    year: string | null;
-  }[] | {
-    term: string | null;
-    year: string | null;
-  } | null;
+  Users:
+    | {
+        name: string | null;
+        email: string | null;
+      }[]
+    | {
+        name: string | null;
+        email: string | null;
+      }
+    | null;
+  Courses:
+    | {
+        department_id: number | null;
+        course_number: string | null;
+        title: string | null;
+      }[]
+    | {
+        department_id: number | null;
+        course_number: string | null;
+        title: string | null;
+      }
+    | null;
+  Semesters:
+    | {
+        term: string | null;
+        year: string | null;
+      }[]
+    | {
+        term: string | null;
+        year: string | null;
+      }
+    | null;
 }
 
-const FEED_TABS: FeedTab[] = ['hot', 'new', 'top'];
+const FEED_TABS: FeedTab[] = ["hot", "new", "top"];
 
 const SIDEBAR_FILTERS_FROM_COMPONENT: NotesFeedFilters = {
   courseIds: [],
@@ -94,62 +302,25 @@ function applyFeedFilters(posts: NotePost[], searchQuery: string, filters: Notes
 
 function sortPosts(posts: NotePost[], tab: FeedTab): NotePost[] {
   switch (tab) {
-    case 'hot':
+    case "hot":
       return [...posts].sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0));
-    case 'new':
+    case "new":
       return [...posts].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    case 'top':
+    case "top":
       return [...posts].sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0));
     default:
       return posts;
   }
 }
 
-function FiltersPlaceholder() {
-  return (
-    <aside className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-6 text-3xl font-bold tracking-tight text-zinc-800">Filters</h2>
-      <div className="space-y-6 text-zinc-700">
-        <section>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">Course</h3>
-          <div className="space-y-2 text-base">
-            <p>CS 220 - Programming Methodology</p>
-            <p>CS 240 - Reasoning Under Uncertainty</p>
-            <p>CS 311 - Algorithms</p>
-            <p>MATH 235 - Linear Algebra</p>
-          </div>
-        </section>
-        <section>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">Semester</h3>
-          <div className="space-y-2 text-base">
-            <p>Spring 2026</p>
-            <p>Fall 2025</p>
-            <p>Spring 2025</p>
-          </div>
-        </section>
-        <section>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">Visibility</h3>
-          <div className="space-y-2 text-base">
-            <p>Public Posts</p>
-            <p>Private Posts</p>
-          </div>
-        </section>
-      </div>
-      <p className="mt-6 rounded-lg bg-zinc-100 p-3 text-sm text-zinc-600">
-        This component to be replaced by actual filter component.
-      </p>
-    </aside>
-  );
-}
-
 function NotesPageContent() {
   const searchParams = useSearchParams();
-  const selectedClassId = searchParams.get('classId');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<FeedTab>('hot');
+  const selectedClassId = searchParams.get("classId");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<FeedTab>("hot");
   const [posts, setPosts] = useState<NotePost[]>([]);
   const [userVotes, setUserVotes] = useState<Record<number, 1 | -1>>({});
-  const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [emptyReason, setEmptyReason] = useState<string | null>(null);
@@ -158,7 +329,7 @@ function NotesPageContent() {
     () =>
       createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       ),
     [],
   );
@@ -167,9 +338,12 @@ function NotesPageContent() {
 
   useEffect(() => {
     const fetchPosts = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session?.user) {
-        setError('Not logged in');
+        setError("Not logged in");
         setLoading(false);
         return;
       }
@@ -177,13 +351,13 @@ function NotesPageContent() {
       setCurrentUserId(session.user.id);
 
       const { data: enrolledData, error: enrolledError } = await supabase
-        .from('Student_Enrolled_Courses')
-        .select('course_id')
-        .eq('author_id', session.user.id);
+        .from("Student_Enrolled_Courses")
+        .select("course_id")
+        .eq("author_id", session.user.id);
 
       if (enrolledError) {
-        console.error('Enrolled courses error:', enrolledError);
-        setError('Failed to load enrolled courses');
+        console.error("Enrolled courses error:", enrolledError);
+        setError("Failed to load enrolled courses");
         setLoading(false);
         return;
       }
@@ -195,7 +369,7 @@ function NotesPageContent() {
         enrolledCourseIds = enrolledCourseIds.filter((courseId) => courseId === classId);
 
         if (enrolledCourseIds.length === 0) {
-          setEmptyReason('That class is not in My Classes.');
+          setEmptyReason("That class is not in My Classes.");
           setPosts([]);
           setLoading(false);
           return;
@@ -203,15 +377,16 @@ function NotesPageContent() {
       }
 
       if (enrolledCourseIds.length === 0) {
-        setEmptyReason('Add a class before browsing notes.');
+        setEmptyReason("Add a class before browsing notes.");
         setPosts([]);
         setLoading(false);
         return;
       }
 
       const { data: postsData, error: postsError } = await supabase
-        .from('Posts')
-        .select(`
+        .from("Posts")
+        .select(
+          `
           post_id,
           created_at,
           author_id,
@@ -242,13 +417,14 @@ function NotesPageContent() {
             term,
             year
           )
-        `)
-        .in('course_id', enrolledCourseIds)
-        .eq('is_report', false);
+        `,
+        )
+        .in("course_id", enrolledCourseIds)
+        .eq("is_report", false);
 
       if (postsError) {
-        console.error('Posts error:', postsError);
-        setError('Failed to load posts');
+        console.error("Posts error:", postsError);
+        setError("Failed to load posts");
         setLoading(false);
         return;
       }
@@ -262,8 +438,8 @@ function NotesPageContent() {
           id: post.post_id,
           created_at: post.created_at,
           author_id: post.author_id,
-          title: post.title ?? '',
-          body: post.body ?? '',
+          title: post.title ?? "",
+          body: post.body ?? "",
           purpose: post.purpose,
           visibility: post.visibility as PostVisibility,
           group_id: post.group_id,
@@ -275,10 +451,10 @@ function NotesPageContent() {
           semester_id: post.semester_id,
           is_report: post.is_report ?? false,
           attachment_url: post.attachment_url,
-          author_name: user?.name ?? 'Unknown',
-          author_email: user?.email ?? '',
-          course_label: `${course?.course_number ?? ''} - ${course?.title ?? ''}`,
-          semester_label: `${semester?.term ?? ''} ${semester?.year ?? ''}`,
+          author_name: user?.name ?? "Unknown",
+          author_email: user?.email ?? "",
+          course_label: `${course?.course_number ?? ""} - ${course?.title ?? ""}`,
+          semester_label: `${semester?.term ?? ""} ${semester?.year ?? ""}`,
           comments_count: 0,
         };
       });
@@ -290,11 +466,11 @@ function NotesPageContent() {
           { data: commentsData, error: commentsError },
         ] = await Promise.all([
           supabase
-            .from('Post_Votes')
-            .select('post_id, value')
-            .eq('user_id', session.user.id)
-            .in('post_id', postIds),
-          supabase.from('Comments').select('post_id').in('post_id', postIds),
+            .from("Post_Votes")
+            .select("post_id, value")
+            .eq("user_id", session.user.id)
+            .in("post_id", postIds),
+          supabase.from("Comments").select("post_id").in("post_id", postIds),
         ]);
 
         if (!votesError && votesData) {
@@ -309,7 +485,7 @@ function NotesPageContent() {
           const commentsCountByPost = new Map<number, number>();
 
           for (const row of commentsData as { post_id: number | null }[]) {
-            if (typeof row.post_id !== 'number') continue;
+            if (typeof row.post_id !== "number") continue;
             commentsCountByPost.set(row.post_id, (commentsCountByPost.get(row.post_id) ?? 0) + 1);
           }
 
@@ -320,78 +496,60 @@ function NotesPageContent() {
       }
 
       setPosts(mapped);
-      setEmptyReason(mapped.length === 0 ? 'No notes have been posted for these classes yet.' : null);
-
+      setEmptyReason(mapped.length === 0 ? "No notes have been posted for these classes yet." : null);
       setLoading(false);
     };
 
-    fetchPosts();
+    void fetchPosts();
   }, [selectedClassId, supabase]);
 
   const handleVote = async (postId: number, value: 1 | -1) => {
     const existingVote = userVotes[postId] ?? null;
 
-    // Optimistically update UI
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id !== postId) return p;
 
         let delta = 0;
         if (existingVote === value) {
-          // Clicking same direction = undo vote
           delta = -value;
         } else if (existingVote !== null) {
-          // Switching direction: ±2
           delta = value * 2;
         } else {
-          // Fresh vote
           delta = value;
         }
 
         return { ...p, votes: p.votes + delta };
-      })
+      }),
     );
 
     setUserVotes((prev) => {
       if (prev[postId] === value) {
-        // Undo vote
         const next = { ...prev };
         delete next[postId];
         return next;
       }
+
       return { ...prev, [postId]: value };
     });
 
-    // Persist to Supabase
     try {
       if (existingVote === value) {
-        // Remove vote
-        await supabase
-          .from('Post_Votes')
-          .delete()
-          .eq('user_id', currentUserId)
-          .eq('post_id', postId);
-
-        await supabase.rpc('increment_votes', { post_id: postId, delta: -value });
+        await supabase.from("Post_Votes").delete().eq("user_id", currentUserId).eq("post_id", postId);
+        await supabase.rpc("increment_votes", { post_id: postId, delta: -value });
       } else if (existingVote !== null) {
-        // Switch direction
         await supabase
-          .from('Post_Votes')
+          .from("Post_Votes")
           .update({ value })
-          .eq('user_id', currentUserId)
-          .eq('post_id', postId);
-
-        await supabase.rpc('increment_votes', { post_id: postId, delta: value * 2 });
+          .eq("user_id", currentUserId)
+          .eq("post_id", postId);
+        await supabase.rpc("increment_votes", { post_id: postId, delta: value * 2 });
       } else {
-        // New vote
-        await supabase
-          .from('Post_Votes')
-          .insert({ user_id: currentUserId, post_id: postId, value });
-
-        await supabase.rpc('increment_votes', { post_id: postId, delta: value });
+        await supabase.from("Post_Votes").insert({ user_id: currentUserId, post_id: postId, value });
+        await supabase.rpc("increment_votes", { post_id: postId, delta: value });
       }
     } catch (err) {
-      console.error('Vote error:', err);
+      console.error("Vote error:", err);
     }
   };
 
@@ -400,23 +558,27 @@ function NotesPageContent() {
     [searchQuery, sidebarFilters, posts, activeTab],
   );
 
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-screen">
-      <p className="text-zinc-500">Loading posts...</p>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-zinc-500">Loading posts...</p>
+      </div>
+    );
+  }
 
-  if (error) return (
-    <div className="flex items-center justify-center min-h-screen">
-      <p className="text-red-500">{error}</p>
-    </div>
-  );
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-red-500">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-zinc-100">
       <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:px-8">
         <div className="hidden lg:block">
-          <FiltersPlaceholder />
+          <SidebarClasses />
         </div>
 
         <main className="space-y-4">
@@ -441,7 +603,7 @@ function NotesPageContent() {
                     type="button"
                     onClick={() => setActiveTab(tab)}
                     className={`rounded-full px-4 py-2 text-sm font-semibold capitalize transition ${
-                      isActive ? 'bg-zinc-200 text-zinc-900' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800'
+                      isActive ? "bg-zinc-200 text-zinc-900" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
                     }`}
                     aria-pressed={isActive}
                   >
@@ -466,7 +628,7 @@ function NotesPageContent() {
 
           {filteredPosts.length === 0 && (
             <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center text-zinc-500">
-              <p>{searchQuery ? 'No posts match your search.' : emptyReason ?? 'No notes found.'}</p>
+              <p>{searchQuery ? "No posts match your search." : emptyReason ?? "No notes found."}</p>
               {emptyReason && (
                 <Link href="/catalogue/departments" className="mt-4 inline-block font-bold text-[#7A1F1F] hover:underline">
                   Browse Course Catalog
