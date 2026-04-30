@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
-import { BookOpen, Bookmark, Plus, Shield, User, X } from "lucide-react";
+import { BookOpen, Bookmark, LogOut, Plus, Shield, User, X } from "lucide-react";
 import { CreatePost } from "./CreatePost";
 
 type AuthUser = {
@@ -17,7 +17,17 @@ export default function Navbar() {
 	const [user, setUser] = useState<AuthUser | null>(null);
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const pathname = usePathname();
+	const router = useRouter();
 	const homeHref = user ? "/classes" : "/";
+
+	const handleLogout = async () => {
+		const supabase = createBrowserClient(
+			process.env.NEXT_PUBLIC_SUPABASE_URL!,
+			process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+		);
+		await supabase.auth.signOut();
+		router.push("/");
+	};
 	const displayName = user?.name?.trim() || "Profile";
 	const navLinkClass = (isActive: boolean) =>
 		`relative inline-flex items-center gap-2 py-5 text-[18px] font-medium transition after:absolute after:bottom-3 after:left-0 after:h-0.5 after:w-full after:rounded-full after:bg-red-800 after:transition ${
@@ -152,6 +162,15 @@ export default function Navbar() {
 										{displayName}
 									</span>
 								</Link>
+
+								<button
+									type="button"
+									onClick={handleLogout}
+									aria-label="Log out"
+									className="inline-flex h-10 items-center gap-2 rounded-full border border-zinc-300 px-3 text-zinc-600 transition hover:bg-white hover:text-red-700"
+								>
+									<LogOut className="h-5 w-5" aria-hidden="true" />
+								</button>
 							</>
 						) : (
 							<Link
