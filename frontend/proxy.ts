@@ -18,14 +18,27 @@ export default async function proxy(request: NextRequest) {
   );
 
   const { data: { session } } = await supabase.auth.getSession();
+  const isHomePage = request.nextUrl.pathname === '/';
 
-  if (!session) {
-    return NextResponse.redirect(new URL('/', request.url));
+  const redirectWithCookies = (location: string) => {
+    const redirectResponse = NextResponse.redirect(new URL(location, request.url));
+    response.cookies.getAll().forEach(({ name, value, ...options }) => {
+      redirectResponse.cookies.set(name, value, options);
+    });
+    return redirectResponse;
+  };
+
+  if (session && isHomePage) {
+    return redirectWithCookies('/classes');
+  }
+
+  if (!session && !isHomePage) {
+    return redirectWithCookies('/');
   }
 
   return response;
 }
 
 export const config = {
-  matcher: ['/classes/:path*', '/notes/:path*', '/catalogue/:path*'],
+  matcher: ['/', '/classes/:path*', '/notes/:path*', '/catalogue/:path*'],
 };
