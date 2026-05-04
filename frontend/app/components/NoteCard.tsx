@@ -12,9 +12,18 @@ import {
 } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 import { useRouter } from "next/navigation";
-import { deleteModerationComment, isUserBannedFromCourse } from "../lib/moderation";
+import {
+  deleteModerationComment,
+  isUserBannedFromCourse,
+} from "../lib/moderation";
 
 export type PostVisibility = "public" | "private";
 
@@ -48,7 +57,10 @@ interface NoteCardProps {
   userVote?: 1 | -1 | null;
   onVote?: (postId: number, value: 1 | -1) => Promise<void>;
   onSavedChange?: (postId: number, isSaved: boolean) => void;
-  onUpdatePost?: (postId: number, updates: { title: string; body: string }) => Promise<void> | void;
+  onUpdatePost?: (
+    postId: number,
+    updates: { title: string; body: string },
+  ) => Promise<void> | void;
 }
 
 interface CommentRow {
@@ -95,7 +107,13 @@ function formatRelativeTime(timestamp: string): string {
   return `${days}d ago`;
 }
 
-export default function NoteCard({ post, userVote = null, onVote, onSavedChange, onUpdatePost }: NoteCardProps) {
+export default function NoteCard({
+  post,
+  userVote = null,
+  onVote,
+  onSavedChange,
+  onUpdatePost,
+}: NoteCardProps) {
   const router = useRouter();
   const supabase = useMemo(
     () =>
@@ -109,7 +127,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [commentCount, setCommentCount] = useState(post.comments_count);
   const [commentDraft, setCommentDraft] = useState("");
-  const [currentSessionUserId, setCurrentSessionUserId] = useState<string | null>(null);
+  const [currentSessionUserId, setCurrentSessionUserId] = useState<
+    string | null
+  >(null);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsLoaded, setCommentsLoaded] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
@@ -139,9 +159,15 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
       : "bg-emerald-100 text-emerald-700";
   const authorLabel = post.author_name || post.author_email || "Unknown";
   const attachmentName = post.attachment_url
-    ? decodeURIComponent(post.attachment_url.split("/").pop()?.split("?")[0] || "attachment")
+    ? decodeURIComponent(
+        post.attachment_url.split("/").pop()?.split("?")[0] || "attachment",
+      )
     : null;
-  const isOwnPost = Boolean(post.author_id && currentSessionUserId && post.author_id === currentSessionUserId);
+  const isOwnPost = Boolean(
+    post.author_id &&
+    currentSessionUserId &&
+    post.author_id === currentSessionUserId,
+  );
   const postHref = `/notes/${post.id}`;
 
   useEffect(() => {
@@ -312,7 +338,10 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
       return;
     }
 
-    if (post.course_id !== null && (await isUserBannedFromCourse(post.course_id, session.user.id))) {
+    if (
+      post.course_id !== null &&
+      (await isUserBannedFromCourse(post.course_id, session.user.id))
+    ) {
       setCommentsError("You are banned from commenting in this class.");
       return;
     }
@@ -473,7 +502,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
       await onUpdatePost(post.id, { title: nextTitle, body: nextBody });
       setIsEditing(false);
     } catch (error) {
-      setEditError(error instanceof Error ? error.message : "Failed to update post.");
+      setEditError(
+        error instanceof Error ? error.message : "Failed to update post.",
+      );
     } finally {
       setIsSavingEdit(false);
     }
@@ -489,7 +520,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
       setComments((prev) => prev.filter((comment) => comment.id !== commentId));
       setCommentCount((prev) => Math.max(prev - 1, 0));
     } catch (error) {
-      setCommentsError(error instanceof Error ? error.message : "Failed to delete comment.");
+      setCommentsError(
+        error instanceof Error ? error.message : "Failed to delete comment.",
+      );
     }
   };
 
@@ -516,7 +549,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
           >
             <ArrowUp className="h-4 w-4" />
           </button>
-          <span className="my-1 text-lg font-semibold text-orange-500">{post.votes}</span>
+          <span className="my-1 text-lg font-semibold text-orange-500">
+            {post.votes}
+          </span>
           <button
             type="button"
             onClick={() => onVote?.(post.id, -1)}
@@ -539,7 +574,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
             <span className="rounded-full bg-zinc-100 px-3 py-1 font-medium text-zinc-700">
               {post.semester_label}
             </span>
-            <span className={`rounded-full px-3 py-1 font-medium ${visibilityClasses}`}>
+            <span
+              className={`rounded-full px-3 py-1 font-medium ${visibilityClasses}`}
+            >
               {post.visibility === "private" ? "Private" : "Public"}
             </span>
             <span>
@@ -596,7 +633,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
             </div>
           ) : (
             <>
-              <h2 className="mb-2 text-2xl font-bold tracking-tight text-zinc-800">{post.title}</h2>
+              <h2 className="mb-2 text-2xl font-bold tracking-tight text-zinc-800">
+                {post.title}
+              </h2>
               <p className="mb-4 whitespace-pre-wrap text-[1.03rem] leading-relaxed text-zinc-700">
                 {post.body}
               </p>
@@ -612,7 +651,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
                 className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900"
               >
                 <Paperclip className="h-4 w-4" />
-                <span className="max-w-[20rem] truncate">{attachmentName || "View attachment"}</span>
+                <span className="max-w-[20rem] truncate">
+                  {attachmentName || "View attachment"}
+                </span>
               </a>
             </div>
           )}
@@ -644,15 +685,7 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
                 <Pencil className="h-4 w-4" />
                 <span>{isEditing ? "Cancel Edit" : "Edit"}</span>
               </button>
-            ) : (
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 font-medium transition hover:text-zinc-900"
-              >
-                <Pencil className="h-4 w-4" />
-                <span>Suggest Edit</span>
-              </button>
-            )}
+            ) : null}
             <button
               type="button"
               onClick={() => void handleSaveToggle()}
@@ -660,7 +693,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
               className={`inline-flex items-center gap-1.5 font-medium transition hover:text-zinc-900 disabled:opacity-50 ${isSaved ? "text-zinc-900" : ""}`}
               aria-label={isSaved ? "Unsave note" : "Save note"}
             >
-              <Bookmark className={`h-4 w-4 ${isSaved ? "fill-current" : ""}`} />
+              <Bookmark
+                className={`h-4 w-4 ${isSaved ? "fill-current" : ""}`}
+              />
               <span>{isSaved ? "Saved" : "Save"}</span>
             </button>
             <Link
@@ -673,7 +708,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
           </div>
 
           {shareState === "error" && (
-            <p className="mt-3 text-sm text-red-600">Unable to share this post right now.</p>
+            <p className="mt-3 text-sm text-red-600">
+              Unable to share this post right now.
+            </p>
           )}
 
           {isCommentsOpen && (
@@ -682,7 +719,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
                 <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-zinc-500">
                   Discussion
                 </h3>
-                <span className="text-xs font-medium text-zinc-400">{commentCount} total</span>
+                <span className="text-xs font-medium text-zinc-400">
+                  {commentCount} total
+                </span>
               </div>
 
               <div className="space-y-3">
@@ -721,7 +760,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
                           {isCurrentUserAdmin && (
                             <button
                               type="button"
-                              onClick={() => void handleDeleteComment(comment.id)}
+                              onClick={() =>
+                                void handleDeleteComment(comment.id)
+                              }
                               className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100"
                             >
                               Delete
@@ -737,7 +778,10 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
               </div>
 
               <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm">
-                <label htmlFor={`comment-${post.id}`} className="mb-2 block text-sm font-semibold text-zinc-700">
+                <label
+                  htmlFor={`comment-${post.id}`}
+                  className="mb-2 block text-sm font-semibold text-zinc-700"
+                >
                   Add a comment
                 </label>
                 <textarea
@@ -755,7 +799,9 @@ export default function NoteCard({ post, userVote = null, onVote, onSavedChange,
                   <button
                     type="button"
                     onClick={() => void handleSubmitComment()}
-                    disabled={isSubmittingComment || commentDraft.trim().length === 0}
+                    disabled={
+                      isSubmittingComment || commentDraft.trim().length === 0
+                    }
                     className="rounded-full bg-[#7A1F1F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#5e1717] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSubmittingComment ? "Posting..." : "Post Comment"}
