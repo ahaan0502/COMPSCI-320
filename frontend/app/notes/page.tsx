@@ -297,6 +297,7 @@ function NotesPageContent() {
   const [activeTab, setActiveTab] = useState<FeedTab>("hot");
   const [posts, setPosts] = useState<NotePost[]>([]);
   const [userVotes, setUserVotes] = useState<Record<number, 1 | -1>>({});
+  const [hotOrder, setHotOrder] = useState<number[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -475,6 +476,18 @@ function NotesPageContent() {
             comments_count: 0,
           };
         });
+      const initialHotOrder = [...mapped]
+        .sort((a, b) => {
+          const scoreA =
+            Math.log10((a.votes ?? 0) + 1) +
+            new Date(a.created_at).getTime() / 45000000;
+          const scoreB =
+            Math.log10((b.votes ?? 0) + 1) +
+            new Date(b.created_at).getTime() / 45000000;
+          return scoreB - scoreA;
+        })
+        .map((post) => post.id);
+      setHotOrder(initialHotOrder);
       const postIds = mapped.map((p) => p.id);
 
       if (postIds.length > 0) {
@@ -636,12 +649,21 @@ function NotesPageContent() {
   };
 
   const filteredPosts = useMemo(
-    () =>
-      sortPosts(
-        applyFeedFilters(posts, searchQuery, sidebarFilters),
-        activeTab,
-      ),
-    [searchQuery, sidebarFilters, posts, activeTab],
+    () => {
+      const filtered = applyFeedFilters(posts, searchQuery, sidebarFilters);
+
+      if (activeTab === "hot") {
+        const hotIndex = new Map(hotOrder.map((id, index) => [id, index]));
+        return [...filtered].sort((a, b) => {
+          const indexA = hotIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+          const indexB = hotIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+          return indexA - indexB;
+        });
+      }
+
+      return sortPosts(filtered, activeTab);
+    },
+    [searchQuery, sidebarFilters, posts, activeTab, hotOrder],
   );
 
   if (loading) {
