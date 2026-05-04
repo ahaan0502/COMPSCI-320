@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
+import { isUmassEmail } from '@/app/lib/authUtils';
+
 
 const redirectTo = (path: string) => {
   window.location.replace(path);
 };
-
-function isUmassEmail(email: string) {
-  return email.trim().toLowerCase().endsWith('@umass.edu');
-}
 
 export default function AuthCallback() {
   const [message, setMessage] = useState('Signing you in...');
