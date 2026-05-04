@@ -5,8 +5,11 @@ import { Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import NoteCard, { type NotePost, type PostVisibility } from "../components/NoteCard";
-import { applyFeedFilters, sortPosts } from '@/app/lib/notesUtils';
+import NoteCard, {
+  type NotePost,
+  type PostVisibility,
+} from "../components/NoteCard";
+import { applyFeedFilters, sortPosts } from "@/app/lib/notesUtils";
 
 interface SidebarClassRow {
   course_id: number;
@@ -37,7 +40,7 @@ interface SidebarClassRow {
 }
 
 function firstRelation<T>(value: T[] | T | null): T | null {
-  return Array.isArray(value) ? value[0] ?? null : value;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
 function SidebarClasses() {
@@ -161,10 +164,15 @@ function SidebarClasses() {
   if (!classes.length) {
     return (
       <aside className="rounded-2xl border border-zinc-200 bg-white p-5 text-zinc-700 shadow-sm">
-        <h2 className="mb-6 text-3xl font-bold tracking-tight text-zinc-800">My Classes</h2>
+        <h2 className="mb-6 text-3xl font-bold tracking-tight text-zinc-800">
+          My Classes
+        </h2>
         <p className="text-zinc-600">
           No classes found.{" "}
-          <Link href="/catalogue/departments" className="font-bold text-[#7A1F1F]">
+          <Link
+            href="/catalogue/departments"
+            className="font-bold text-[#7A1F1F]"
+          >
             Browse Course Catalog
           </Link>
         </p>
@@ -174,7 +182,9 @@ function SidebarClasses() {
 
   return (
     <aside className="rounded-2xl border border-zinc-200 bg-white p-5 text-zinc-700 shadow-sm">
-      <h2 className="mb-4 text-2xl font-bold tracking-tight text-zinc-800">My Classes</h2>
+      <h2 className="mb-4 text-2xl font-bold tracking-tight text-zinc-800">
+        My Classes
+      </h2>
       <div className="space-y-3">
         <button
           type="button"
@@ -186,12 +196,18 @@ function SidebarClasses() {
           All classes
         </button>
         {classes.map((c) => {
-          const isActive = String(c.courseId) === activeClassId && String(c.semesterId) === activeSemesterId;
+          const isActive =
+            String(c.courseId) === activeClassId &&
+            String(c.semesterId) === activeSemesterId;
           return (
             <button
               key={`${c.courseId}-${c.semesterId}`}
               type="button"
-              onClick={() => router.push(`/notes?classId=${c.courseId}&semesterId=${c.semesterId}`)}
+              onClick={() =>
+                router.push(
+                  `/notes?classId=${c.courseId}&semesterId=${c.semesterId}`,
+                )
+              }
               className={`w-full rounded-md px-3 py-2 text-left text-sm ${
                 isActive ? "bg-zinc-100 font-semibold" : "hover:bg-zinc-50"
               }`}
@@ -273,7 +289,6 @@ const SIDEBAR_FILTERS_FROM_COMPONENT: NotesFeedFilters = {
   semesterIds: [],
   visibility: [],
 };
-
 function NotesPageContent() {
   const searchParams = useSearchParams();
   const selectedClassId = searchParams.get("classId");
@@ -324,11 +339,16 @@ function NotesPageContent() {
         return;
       }
 
-      let enrolledOfferings = (enrolledData || []) as { course_id: number; semester_id: number }[];
+      let enrolledOfferings = (enrolledData || []) as {
+        course_id: number;
+        semester_id: number;
+      }[];
 
       if (selectedClassId) {
         const classId = Number(selectedClassId);
-        const semesterId = selectedSemesterId ? Number(selectedSemesterId) : null;
+        const semesterId = selectedSemesterId
+          ? Number(selectedSemesterId)
+          : null;
 
         enrolledOfferings = enrolledOfferings.filter((offering) => {
           if (offering.course_id !== classId) return false;
@@ -351,7 +371,9 @@ function NotesPageContent() {
       }
 
       const enrolledOfferingKeys = new Set(
-        enrolledOfferings.map((offering) => `${offering.course_id}:${offering.semester_id}`),
+        enrolledOfferings.map(
+          (offering) => `${offering.course_id}:${offering.semester_id}`,
+        ),
       );
       const enrolledCourseIds = Array.from(
         new Set(enrolledOfferings.map((offering) => offering.course_id)),
@@ -409,39 +431,48 @@ function NotesPageContent() {
 
       const mapped: NotePost[] = ((postsData || []) as SupabasePostRow[])
         .filter((post) => {
-          if (typeof post.course_id !== "number" || typeof post.semester_id !== "number") {
+          if (
+            typeof post.course_id !== "number" ||
+            typeof post.semester_id !== "number"
+          ) {
             return false;
           }
 
-          return enrolledOfferingKeys.has(`${post.course_id}:${post.semester_id}`);
+          return enrolledOfferingKeys.has(
+            `${post.course_id}:${post.semester_id}`,
+          );
         })
         .map((post) => {
           const user = Array.isArray(post.Users) ? post.Users[0] : post.Users;
-          const course = Array.isArray(post.Courses) ? post.Courses[0] : post.Courses;
-          const semester = Array.isArray(post.Semesters) ? post.Semesters[0] : post.Semesters;
+          const course = Array.isArray(post.Courses)
+            ? post.Courses[0]
+            : post.Courses;
+          const semester = Array.isArray(post.Semesters)
+            ? post.Semesters[0]
+            : post.Semesters;
 
           return {
-          id: post.post_id,
-          created_at: post.created_at,
-          author_id: post.author_id,
-          title: post.title ?? "",
-          body: post.body ?? "",
-          purpose: post.purpose,
-          visibility: post.visibility as PostVisibility,
-          group_id: post.group_id,
-          tags: post.tags,
-          votes: post.votes ?? 0,
-          updated_at: post.updated_at,
-          is_deleted: false,
-          course_id: post.course_id,
-          semester_id: post.semester_id,
-          is_report: post.is_report ?? false,
-          attachment_url: post.attachment_url,
-          author_name: user?.name ?? "Unknown",
-          author_email: user?.email ?? "",
-          course_label: `${course?.course_number ?? ""} - ${course?.title ?? ""}`,
-          semester_label: `${semester?.term ?? ""} ${semester?.year ?? ""}`,
-          comments_count: 0,
+            id: post.post_id,
+            created_at: post.created_at,
+            author_id: post.author_id,
+            title: post.title ?? "",
+            body: post.body ?? "",
+            purpose: post.purpose,
+            visibility: post.visibility as PostVisibility,
+            group_id: post.group_id,
+            tags: post.tags,
+            votes: post.votes ?? 0,
+            updated_at: post.updated_at,
+            is_deleted: false,
+            course_id: post.course_id,
+            semester_id: post.semester_id,
+            is_report: post.is_report ?? false,
+            attachment_url: post.attachment_url,
+            author_name: user?.name ?? "Unknown",
+            author_email: user?.email ?? "",
+            course_label: `${course?.course_number ?? ""} - ${course?.title ?? ""}`,
+            semester_label: `${semester?.term ?? ""} ${semester?.year ?? ""}`,
+            comments_count: 0,
           };
         });
       const postIds = mapped.map((p) => p.id);
@@ -472,7 +503,10 @@ function NotesPageContent() {
 
           for (const row of commentsData as { post_id: number | null }[]) {
             if (typeof row.post_id !== "number") continue;
-            commentsCountByPost.set(row.post_id, (commentsCountByPost.get(row.post_id) ?? 0) + 1);
+            commentsCountByPost.set(
+              row.post_id,
+              (commentsCountByPost.get(row.post_id) ?? 0) + 1,
+            );
           }
 
           for (const post of mapped) {
@@ -482,7 +516,11 @@ function NotesPageContent() {
       }
 
       setPosts(mapped);
-      setEmptyReason(mapped.length === 0 ? "No notes have been posted for these classes yet." : null);
+      setEmptyReason(
+        mapped.length === 0
+          ? "No notes have been posted for these classes yet."
+          : null,
+      );
       setLoading(false);
     };
 
@@ -521,25 +559,43 @@ function NotesPageContent() {
 
     try {
       if (existingVote === value) {
-        await supabase.from("Post_Votes").delete().eq("user_id", currentUserId).eq("post_id", postId);
-        await supabase.rpc("increment_votes", { post_id: postId, delta: -value });
+        await supabase
+          .from("Post_Votes")
+          .delete()
+          .eq("user_id", currentUserId)
+          .eq("post_id", postId);
+        await supabase.rpc("increment_votes", {
+          post_id: postId,
+          delta: -value,
+        });
       } else if (existingVote !== null) {
         await supabase
           .from("Post_Votes")
           .update({ value })
           .eq("user_id", currentUserId)
           .eq("post_id", postId);
-        await supabase.rpc("increment_votes", { post_id: postId, delta: value * 2 });
+        await supabase.rpc("increment_votes", {
+          post_id: postId,
+          delta: value * 2,
+        });
       } else {
-        await supabase.from("Post_Votes").insert({ user_id: currentUserId, post_id: postId, value });
-        await supabase.rpc("increment_votes", { post_id: postId, delta: value });
+        await supabase
+          .from("Post_Votes")
+          .insert({ user_id: currentUserId, post_id: postId, value });
+        await supabase.rpc("increment_votes", {
+          post_id: postId,
+          delta: value,
+        });
       }
     } catch (err) {
       console.error("Vote error:", err);
     }
   };
 
-  const handleUpdatePost = async (postId: number, updates: { title: string; body: string }) => {
+  const handleUpdatePost = async (
+    postId: number,
+    updates: { title: string; body: string },
+  ) => {
     if (!currentUserId) {
       throw new Error("Please sign in to edit this post.");
     }
@@ -580,7 +636,11 @@ function NotesPageContent() {
   };
 
   const filteredPosts = useMemo(
-    () => sortPosts(applyFeedFilters(posts, searchQuery, sidebarFilters), activeTab),
+    () =>
+      sortPosts(
+        applyFeedFilters(posts, searchQuery, sidebarFilters),
+        activeTab,
+      ),
     [searchQuery, sidebarFilters, posts, activeTab],
   );
 
@@ -629,7 +689,9 @@ function NotesPageContent() {
                     type="button"
                     onClick={() => setActiveTab(tab)}
                     className={`rounded-full px-4 py-2 text-sm font-semibold capitalize transition ${
-                      isActive ? "bg-zinc-200 text-zinc-900" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                      isActive
+                        ? "bg-zinc-200 text-zinc-900"
+                        : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
                     }`}
                     aria-pressed={isActive}
                   >
@@ -655,9 +717,16 @@ function NotesPageContent() {
 
           {filteredPosts.length === 0 && (
             <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center text-zinc-500">
-              <p>{searchQuery ? "No posts match your search." : emptyReason ?? "No notes found."}</p>
+              <p>
+                {searchQuery
+                  ? "No posts match your search."
+                  : (emptyReason ?? "No notes found.")}
+              </p>
               {emptyReason && (
-                <Link href="/catalogue/departments" className="mt-4 inline-block font-bold text-[#7A1F1F] hover:underline">
+                <Link
+                  href="/catalogue/departments"
+                  className="mt-4 inline-block font-bold text-[#7A1F1F] hover:underline"
+                >
                   Browse Course Catalog
                 </Link>
               )}
@@ -671,7 +740,9 @@ function NotesPageContent() {
 
 export default function NotesPage() {
   return (
-    <Suspense fallback={<div className="min-h-[calc(100vh-4rem)] bg-zinc-100" />}>
+    <Suspense
+      fallback={<div className="min-h-[calc(100vh-4rem)] bg-zinc-100" />}
+    >
       <NotesPageContent />
     </Suspense>
   );

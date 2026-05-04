@@ -1,5 +1,5 @@
-import { createServerClient } from '@supabase/ssr';
-import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from "@supabase/ssr";
+import { NextRequest, NextResponse } from "next/server";
 
 export default async function proxy(request: NextRequest) {
   const response = NextResponse.next();
@@ -10,18 +10,23 @@ export default async function proxy(request: NextRequest) {
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
-        setAll: (cookies) => cookies.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options);
-        }),
+        setAll: (cookies) =>
+          cookies.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          }),
       },
-    }
+    },
   );
 
-  const { data: { session } } = await supabase.auth.getSession();
-  const isHomePage = request.nextUrl.pathname === '/';
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const isHomePage = request.nextUrl.pathname === "/";
 
   const redirectWithCookies = (location: string) => {
-    const redirectResponse = NextResponse.redirect(new URL(location, request.url));
+    const redirectResponse = NextResponse.redirect(
+      new URL(location, request.url),
+    );
     response.cookies.getAll().forEach(({ name, value, ...options }) => {
       redirectResponse.cookies.set(name, value, options);
     });
@@ -29,16 +34,16 @@ export default async function proxy(request: NextRequest) {
   };
 
   if (session && isHomePage) {
-    return redirectWithCookies('/classes');
+    return redirectWithCookies("/classes");
   }
 
   if (!session && !isHomePage) {
-    return redirectWithCookies('/');
+    return redirectWithCookies("/");
   }
 
   return response;
 }
 
 export const config = {
-  matcher: ['/', '/classes/:path*', '/notes/:path*', '/catalogue/:path*'],
+  matcher: ["/", "/classes/:path*", "/notes/:path*", "/catalogue/:path*"],
 };
