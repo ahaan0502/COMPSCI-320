@@ -95,7 +95,11 @@ function applyFeedFilters(posts: NotePost[], searchQuery: string, filters: Notes
 function sortPosts(posts: NotePost[], tab: FeedTab): NotePost[] {
   switch (tab) {
     case 'hot':
-      return [...posts].sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0));
+      return [...posts].sort((a, b) => {
+        const scoreA = Math.log10((a.votes ?? 0) + 1) + new Date(a.created_at).getTime() / 45000000;
+        const scoreB = Math.log10((b.votes ?? 0) + 1) + new Date(b.created_at).getTime() / 45000000;
+        return scoreB - scoreA;
+      });
     case 'new':
       return [...posts].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     case 'top':
