@@ -196,6 +196,7 @@ export default function Navbar() {
 							<h2 className="text-xl font-semibold text-black dark:text-white">Create New Post</h2>
 							<button
 								type="button"
+								aria-label="Close"
 								onClick={() => setIsModalOpen(false)}
 								className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
 							>
