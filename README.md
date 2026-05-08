@@ -79,15 +79,23 @@ Once both are running, open your browser and go to [http://localhost:3000](http:
 ## Testing
  
 Run the test suites:
- 
-```bash
-cd backend
-npm test
-```
- 
+
+Unit tests 
 ```bash
 cd frontend
 npm test
+```
+
+End-to-end tests
+```bash
+cd frontend
+npm run test:e2e
+```
+
+While the app is running, for auth-dependent end-to-end tests
+```bash
+cd frontend
+npx playwright codegen --save-storage=e2e/auth-state.json http://localhost:3000
 ```
  
 ---
