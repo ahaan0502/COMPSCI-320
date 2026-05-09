@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { getSiteUrl } from '@/app/lib/siteUrl';
 
 export async function GET(request: Request) {
   const supabase = createClient(
@@ -7,7 +8,7 @@ export async function GET(request: Request) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin;
+  const siteUrl = getSiteUrl(request);
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',

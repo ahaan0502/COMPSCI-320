@@ -1,10 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 import { isUmassEmail } from "@/app/lib/authUtils";
+import { getSiteUrl } from "@/app/lib/siteUrl";
 
 export async function GET(request: NextRequest) {
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin;
+  const siteUrl = getSiteUrl(request);
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
 

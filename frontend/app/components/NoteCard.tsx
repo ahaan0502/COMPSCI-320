@@ -43,6 +43,7 @@ export interface NotePost {
   course_id: number | null;
   semester_id: number | null;
   is_report: boolean;
+  share_token?: string | null;
   attachment_url?: string | null;
   author_name: string;
   author_email: string;
@@ -105,6 +106,14 @@ function formatRelativeTime(timestamp: string): string {
 
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function createShareToken() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export default function NoteCard({
@@ -393,6 +402,24 @@ export default function NoteCard({
     }
 
     const shareUrl = new URL(`/notes/${post.id}`, window.location.origin);
+    let shareToken = post.share_token ?? null;
+
+    if (post.visibility === "private") {
+      shareToken = shareToken || createShareToken();
+
+      const { error } = await supabase
+        .from("Posts")
+        .update({ share_token: shareToken })
+        .eq("post_id", post.id)
+        .eq("author_id", post.author_id);
+
+      if (error) {
+        setShareState("error");
+        return;
+      }
+
+      shareUrl.searchParams.set("share", shareToken);
+    }
 
     const shareData = {
       title: post.title,

@@ -3,6 +3,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { useEffect, useMemo, useState } from "react";
 import NoteCard, { type NotePost, type PostVisibility } from "../components/NoteCard";
+import { canViewPost } from "../lib/postVisibility";
 
 interface SavedPostRow {
   post_id: number;
@@ -19,6 +20,7 @@ interface SavedPostRow {
   course_id: number | null;
   semester_id: number | null;
   is_report: boolean | null;
+  share_token: string | null;
   attachment_url: string | null;
   Users:
     | {
@@ -86,6 +88,7 @@ function mapPost(post: SavedPostRow): NotePost {
     course_id: post.course_id,
     semester_id: post.semester_id,
     is_report: post.is_report ?? false,
+    share_token: post.share_token,
     attachment_url: post.attachment_url,
     author_name: user?.name ?? "Unknown",
     author_email: user?.email ?? "",
@@ -149,16 +152,17 @@ export default function SavedNotesPage() {
           course_id,
           semester_id,
           is_report,
+          share_token,
           attachment_url,
-          Users (
+          Users!posts_author_id_fkey (
             name,
             email
           ),
-          Courses (
+          Courses!Posts_course_id_fkey (
             course_number,
             title
           ),
-          Semesters (
+          Semesters!Posts_semester_id_fkey (
             term,
             year
           )
@@ -180,7 +184,8 @@ export default function SavedNotesPage() {
         .map((row) => {
           const post = firstRelation(row.Posts);
           if (!post || post.is_report) return null;
-          return mapPost(post);
+          const mappedPost = mapPost(post);
+          return canViewPost(mappedPost, session.user.id) ? mappedPost : null;
         })
         .filter((post): post is NotePost => post !== null);
 

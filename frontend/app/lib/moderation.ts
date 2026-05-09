@@ -47,6 +47,7 @@ interface SupabasePostRow {
   course_id: number | null;
   semester_id: number | null;
   is_report: boolean | null;
+  share_token: string | null;
   Users:
     | {
         name: string | null;
@@ -201,15 +202,16 @@ export async function fetchModerationData(options: ModerationQueryOptions = {}):
       course_id,
       semester_id,
       is_report,
-      Users (
+      share_token,
+      Users!posts_author_id_fkey (
         name,
         email
       ),
-      Courses (
+      Courses!Posts_course_id_fkey (
         course_number,
         title
       ),
-      Semesters (
+      Semesters!Posts_semester_id_fkey (
         term,
         year
       )

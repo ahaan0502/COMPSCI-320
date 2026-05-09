@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import {
   ArrowDown,
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { type NotePost, type PostVisibility } from '../../components/NoteCard';
 import { deleteModerationComment, isUserBannedFromCourse } from '../../lib/moderation';
+import { canViewPost } from '../../lib/postVisibility';
 
 interface SupabasePostRow {
   post_id: number;
@@ -31,6 +32,7 @@ interface SupabasePostRow {
   course_id: number | null;
   semester_id: number | null;
   is_report: boolean | null;
+  share_token: string | null;
   attachment_url: string | null;
   Users:
     | { name: string | null; email: string | null }[]
@@ -99,10 +101,20 @@ function getAttachmentKind(url: string): 'image' | 'pdf' | 'other' {
   return 'other';
 }
 
+function createShareToken() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export default function PostDetailPage() {
   const params = useParams<{ postId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const postId = Number(Array.isArray(params.postId) ? params.postId[0] : params.postId);
+  const sharedToken = searchParams.get('share');
 
   const client = useMemo(
     () =>
@@ -171,16 +183,17 @@ export default function PostDetailPage() {
           course_id,
           semester_id,
           is_report,
+          share_token,
           attachment_url,
-          Users (
+          Users!posts_author_id_fkey (
             name,
             email
           ),
-          Courses (
+          Courses!Posts_course_id_fkey (
             course_number,
             title
           ),
-          Semesters (
+          Semesters!Posts_semester_id_fkey (
             term,
             year
           )
@@ -222,6 +235,7 @@ export default function PostDetailPage() {
         course_id: row.course_id,
         semester_id: row.semester_id,
         is_report: row.is_report ?? false,
+        share_token: row.share_token,
         attachment_url: row.attachment_url,
         author_name: user?.name ?? user?.email ?? 'Unknown',
         author_email: user?.email ?? '',
@@ -229,6 +243,12 @@ export default function PostDetailPage() {
         semester_label: `${semester?.term ?? ''} ${semester?.year ?? ''}`.trim() || 'Unknown semester',
         comments_count: 0,
       });
+
+      if (!canViewPost({ author_id: row.author_id, visibility: row.visibility, share_token: row.share_token }, userId, sharedToken)) {
+        setError('Post not found.');
+        setLoading(false);
+        return;
+      }
 
       if (session?.user) {
         const { data: voteRow } = await client
@@ -293,7 +313,7 @@ export default function PostDetailPage() {
     };
 
     void loadPost();
-  }, [client, postId]);
+  }, [client, postId, sharedToken]);
 
   useEffect(() => {
     if (shareState === 'idle') return;
@@ -326,6 +346,26 @@ export default function PostDetailPage() {
     if (typeof window === 'undefined' || !post) return;
 
     const shareUrl = new URL(`/notes/${post.id}`, window.location.origin);
+    let shareToken = post.share_token ?? null;
+
+    if (post.visibility === 'private') {
+      shareToken = shareToken || createShareToken();
+
+      const { error } = await client
+        .from('Posts')
+        .update({ share_token: shareToken })
+        .eq('post_id', post.id)
+        .eq('author_id', post.author_id);
+
+      if (error) {
+        setShareState('error');
+        return;
+      }
+
+      shareUrl.searchParams.set('share', shareToken);
+      setPost((current) => (current ? { ...current, share_token: shareToken } : current));
+    }
+
     const shareData = {
       title: post.title,
       text: `${post.title} · ${post.course_label}`,

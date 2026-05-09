@@ -10,6 +10,7 @@ import NoteCard, {
   type PostVisibility,
 } from "../components/NoteCard";
 import { applyFeedFilters, sortPosts } from "@/app/lib/notesUtils";
+import { canViewPost } from "@/app/lib/postVisibility";
 
 interface SidebarClassRow {
   course_id: number;
@@ -247,6 +248,7 @@ interface SupabasePostRow {
   course_id: number | null;
   semester_id: number | null;
   is_report: boolean | null;
+  share_token: string | null;
   attachment_url: string | null;
   Users:
     | {
@@ -260,12 +262,10 @@ interface SupabasePostRow {
     | null;
   Courses:
     | {
-        department_id: number | null;
         course_number: string | null;
         title: string | null;
       }[]
     | {
-        department_id: number | null;
         course_number: string | null;
         title: string | null;
       }
@@ -401,19 +401,17 @@ function NotesPageContent() {
           course_id,
           semester_id,
           is_report,
+          share_token,
           attachment_url,
-          Users (
+          Users!posts_author_id_fkey (
             name,
             email
           ),
-          Courses (
-            course_id,
-            department_id,
+          Courses!Posts_course_id_fkey (
             course_number,
             title
           ),
-          Semesters (
-            semester_id,
+          Semesters!Posts_semester_id_fkey (
             term,
             year
           )
@@ -425,7 +423,7 @@ function NotesPageContent() {
 
       if (postsError) {
         console.error("Posts error:", postsError);
-        setError("Failed to load posts");
+        setError(`Failed to load posts: ${postsError.message}`);
         setLoading(false);
         return;
       }
@@ -468,6 +466,7 @@ function NotesPageContent() {
             course_id: post.course_id,
             semester_id: post.semester_id,
             is_report: post.is_report ?? false,
+            share_token: post.share_token,
             attachment_url: post.attachment_url,
             author_name: user?.name ?? "Unknown",
             author_email: user?.email ?? "",
@@ -475,7 +474,8 @@ function NotesPageContent() {
             semester_label: `${semester?.term ?? ""} ${semester?.year ?? ""}`,
             comments_count: 0,
           };
-        });
+        })
+        .filter((post) => canViewPost(post, session.user.id));
       const initialHotOrder = [...mapped]
         .sort((a, b) => {
           const scoreA =

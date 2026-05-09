@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import NoteCard, { type NotePost, type PostVisibility } from '../components/NoteCard';
+import { canViewPost } from '../lib/postVisibility';
 
 const UserIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-16 w-16">
@@ -67,6 +68,7 @@ interface SupabasePostRow {
   course_id: number | null;
   semester_id: number | null;
   is_report: boolean | null;
+  share_token: string | null;
   attachment_url: string | null;
   Users:
     | {
@@ -204,6 +206,7 @@ function mapPosts(posts: SupabasePostRow[], commentsCountByPost: Map<number, num
       course_id: post.course_id,
       semester_id: post.semester_id,
       is_report: Boolean(post.is_report),
+      share_token: post.share_token,
       attachment_url: post.attachment_url,
       author_name: user?.name ?? 'Unknown',
       author_email: user?.email ?? '',
@@ -284,16 +287,17 @@ export default function ProfilePage() {
                 course_id,
                 semester_id,
                 is_report,
+                share_token,
                 attachment_url,
-                Users (
+                Users!posts_author_id_fkey (
                   name,
                   email
                 ),
-                Courses (
+                Courses!Posts_course_id_fkey (
                   course_number,
                   title
                 ),
-                Semesters (
+                Semesters!Posts_semester_id_fkey (
                   term,
                   year
                 )
@@ -380,16 +384,17 @@ export default function ProfilePage() {
               course_id,
               semester_id,
               is_report,
+              share_token,
               attachment_url,
-              Users (
+              Users!posts_author_id_fkey (
                 name,
                 email
               ),
-              Courses (
+              Courses!Posts_course_id_fkey (
                 course_number,
                 title
               ),
-              Semesters (
+              Semesters!Posts_semester_id_fkey (
                 term,
                 year
               )
@@ -399,7 +404,8 @@ export default function ProfilePage() {
 
           if (likedPostsError) throw likedPostsError;
 
-          likedPosts = mapPosts((likedPostsData || []) as SupabasePostRow[], commentsCountByPost);
+          likedPosts = mapPosts((likedPostsData || []) as SupabasePostRow[], commentsCountByPost)
+            .filter((post) => canViewPost(post, session.user.id));
         }
 
         const displayName = formatDisplayName(userProfile?.name, userProfile?.email || email, metadataName);
