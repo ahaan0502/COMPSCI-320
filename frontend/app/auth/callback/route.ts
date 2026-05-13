@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
       return redirectWithCookies("/?error=db-error");
     }
 
-    return response;
+    return redirectWithCookies("/classes");
   } catch (error) {
     console.error("Authentication callback failed:", error);
     return redirectWithCookies("/?error=oauth-failed");

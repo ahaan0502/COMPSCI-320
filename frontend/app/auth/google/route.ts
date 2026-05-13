@@ -1,11 +1,21 @@
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { createServerClient } from "@supabase/ssr";
+import { NextRequest, NextResponse } from "next/server";
 import { getSiteUrl } from '@/app/lib/siteUrl';
 
-export async function GET(request: Request) {
-  const supabase = createClient(
+export async function GET(request: NextRequest) {
+  const response = NextResponse.next({ request });
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookies) =>
+          cookies.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          }),
+      },
+    },
   );
 
   const siteUrl = getSiteUrl(request);
@@ -23,5 +33,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL('/?error=oauth-failed', siteUrl));
   }
 
-  return NextResponse.redirect(data.url);
+  const redirectResponse = NextResponse.redirect(data.url);
+  response.cookies.getAll().forEach(({ name, value, ...options }) => {
+    redirectResponse.cookies.set(name, value, options);
+  });
+  return redirectResponse;
 }
