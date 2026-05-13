@@ -36,7 +36,6 @@ export interface NotePost {
   purpose: string | null;
   visibility: PostVisibility;
   group_id: number | null;
-  tags: string[];
   votes: number;
   updated_at: string;
   is_deleted: boolean;

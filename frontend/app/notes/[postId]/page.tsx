@@ -26,7 +26,6 @@ interface SupabasePostRow {
   purpose: string | null;
   visibility: PostVisibility;
   group_id: number | null;
-  tags: string[] | null;
   votes: number | null;
   updated_at: string | null;
   course_id: number | null;
@@ -177,7 +176,6 @@ export default function PostDetailPage() {
           purpose,
           visibility,
           group_id,
-          tags,
           votes,
           updated_at,
           course_id,
@@ -228,7 +226,6 @@ export default function PostDetailPage() {
         purpose: row.purpose,
         visibility: row.visibility,
         group_id: row.group_id,
-        tags: row.tags ?? [],
         votes: row.votes ?? 0,
         updated_at: row.updated_at ?? row.created_at,
         is_deleted: false,
@@ -570,15 +567,7 @@ export default function PostDetailPage() {
                 </div>
               </div>
 
-              {post.tags.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {post.tags.map((tag) => (
-                    <span key={tag} className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
+              
 
               <div className="mt-6 whitespace-pre-wrap text-[1.05rem] leading-8 text-zinc-800">{post.body}</div>
 
